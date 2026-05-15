@@ -29,20 +29,22 @@ const App = (() => {
     }
   }
 
+  // --- API URL 管理 ---
+  function getApiUrl() {
+    return localStorage.getItem('WEB_APP_URL') || CONFIG.WEB_APP_URL;
+  }
+
+  function isApiConfigured() {
+    const url = getApiUrl();
+    return url && !url.includes('\u300a') && url.startsWith('https://');
+  }
+
   // --- 初期化 ---
   function init() {
     document.getElementById('app-version').textContent = 'v' + CONFIG.APP_VERSION;
     document.getElementById('settings-version').textContent = CONFIG.APP_VERSION;
 
-    const isConfigured = CONFIG.WEB_APP_URL && !CONFIG.WEB_APP_URL.includes('\u300a');
-    const apiEl = document.getElementById('settings-api');
-    if (isConfigured) {
-      apiEl.textContent = '接続済み';
-      apiEl.className = 'setting-value connected';
-    } else {
-      apiEl.textContent = '未設定（config.js を編集してください）';
-      apiEl.className = 'setting-value not-connected';
-    }
+    updateApiStatus();
 
     document.getElementById('input-barcode').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') searchManual();
@@ -53,6 +55,32 @@ const App = (() => {
         navigator.serviceWorker.register('./sw.js');
       });
     }
+  }
+
+  function updateApiStatus() {
+    const apiEl = document.getElementById('settings-api');
+    const urlInput = document.getElementById('input-api-url');
+    if (isApiConfigured()) {
+      apiEl.textContent = '接続済み';
+      apiEl.className = 'setting-value connected';
+      if (urlInput) urlInput.value = getApiUrl();
+    } else {
+      apiEl.textContent = '未設定';
+      apiEl.className = 'setting-value not-connected';
+      if (urlInput) urlInput.value = '';
+    }
+  }
+
+  function saveApiUrl() {
+    const input = document.getElementById('input-api-url').value.trim();
+    if (!input) return;
+    if (!input.startsWith('https://script.google.com/')) {
+      alert('URLが正しくありません。\nhttps://script.google.com/... で始まるURLを入力してください。');
+      return;
+    }
+    localStorage.setItem('WEB_APP_URL', input);
+    updateApiStatus();
+    alert('保存しました');
   }
 
   // --- 画面遷移 ---
@@ -141,8 +169,8 @@ const App = (() => {
   async function lookupItem(barcode) {
     if (searching) return;
 
-    if (!CONFIG.WEB_APP_URL || CONFIG.WEB_APP_URL.includes('\u300a')) {
-      showError('API未設定', 'config.js の WEB_APP_URL を設定してください。', barcode);
+    if (!isApiConfigured()) {
+      showError('API未設定', '設定画面から Web App URL を入力してください。', barcode);
       return;
     }
 
@@ -150,7 +178,7 @@ const App = (() => {
     showScreen('screen-loading');
 
     try {
-      const url = CONFIG.WEB_APP_URL + '?action=findItemByBarcode&barcode=' + encodeURIComponent(barcode);
+      const url = getApiUrl() + '?action=findItemByBarcode&barcode=' + encodeURIComponent(barcode);
       const res = await fetch(url, { method: 'GET', redirect: 'follow' });
       const json = await res.json();
 
@@ -253,5 +281,6 @@ const App = (() => {
     goToSettings,
     searchManual,
     lookupItem,
+    saveApiUrl,
   };
 })();
