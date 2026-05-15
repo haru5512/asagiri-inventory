@@ -112,6 +112,12 @@
       <div class="setting-item">
         <div class="setting-label">API接続先</div>
         <div class="setting-value" id="settings-api"></div>
+        <div class="form-group" style="margin-top:12px;">
+          <input type="url" id="input-api-url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+        </div>
+        <button class="btn btn-primary" id="btn-save-url" onclick="App.saveApiUrl()" style="margin-top:8px;">
+          保存
+        </button>
       </div>
     </div>
   </div>
