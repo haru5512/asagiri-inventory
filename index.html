@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2c7a3f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Asagiri Inventory</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <!-- Screen 1: Top -->
+  <div id="screen-top" class="screen active">
+    <div class="header">
+      <div>
+        <h1>Asagiri Inventory</h1>
+        <span class="version" id="app-version"></span>
+      </div>
+    </div>
+    <div class="content">
+      <div class="menu">
+        <button class="btn btn-primary" id="btn-scan" onclick="App.goToScan()">
+          <span>&#x1F4F7;</span> スキャン開始
+        </button>
+        <button class="btn btn-secondary" id="btn-manual" onclick="App.goToManual()">
+          <span>&#x2328;</span> 手入力
+        </button>
+        <button class="btn btn-outline" onclick="App.goToSettings()">
+          <span>&#x2699;</span> 設定
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Scan -->
+  <div id="screen-scan" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="App.goToTop()">&larr;</button>
+      <h1>スキャン</h1>
+    </div>
+    <div class="content">
+      <div class="video-container">
+        <video id="scan-video" playsinline></video>
+      </div>
+      <p class="scan-guide">バーコードをカメラに映してください</p>
+      <button class="btn btn-secondary" onclick="App.goToManual()">
+        <span>&#x2328;</span> 手入力に切替
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen 3: Manual input -->
+  <div id="screen-manual" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="App.goToTop()">&larr;</button>
+      <h1>手入力検索</h1>
+    </div>
+    <div id="camera-banner" class="camera-banner" style="display:none;">
+      カメラが使えないため手入力に切替えました
+    </div>
+    <div class="content">
+      <div class="form-group">
+        <label for="input-barcode">バーコード or 品目ID</label>
+        <input type="text" id="input-barcode" placeholder="例: 4901234567890 or IT001" autocomplete="off">
+      </div>
+      <button class="btn btn-primary" id="btn-search" onclick="App.searchManual()">
+        検索
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen 4: Result -->
+  <div id="screen-result" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="App.goToTop()">&larr;</button>
+      <h1>検索結果</h1>
+    </div>
+    <div class="content">
+      <div id="result-content"></div>
+      <div id="result-actions"></div>
+    </div>
+  </div>
+
+  <!-- Screen 5: Loading -->
+  <div id="screen-loading" class="screen">
+    <div class="header">
+      <h1>Asagiri Inventory</h1>
+    </div>
+    <div class="content">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>検索中...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 6: Settings -->
+  <div id="screen-settings" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="App.goToTop()">&larr;</button>
+      <h1>設定</h1>
+    </div>
+    <div class="content">
+      <div class="setting-item">
+        <div class="setting-label">アプリバージョン</div>
+        <div class="setting-value" id="settings-version"></div>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">API接続先</div>
+        <div class="setting-value" id="settings-api"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/@zxing/library@0.21.0/umd/index.min.js"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
