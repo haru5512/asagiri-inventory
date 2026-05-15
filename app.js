@@ -111,44 +111,59 @@ const App = (() => {
     showScreen('screen-settings');
   }
 
+  // --- ZXing 遅延読み込み ---
+  function loadZXing() {
+    return new Promise((resolve, reject) => {
+      if (typeof ZXing !== 'undefined') { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@zxing/library@0.21.0/umd/index.min.js';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('バーコードライブラリの読み込みに失敗しました'));
+      document.head.appendChild(s);
+    });
+  }
+
   // --- スキャン ---
   function startScan() {
     if (scanning) return;
 
-    if (!codeReader) {
-      codeReader = new ZXing.BrowserMultiFormatReader();
-    }
-
-    const videoEl = document.getElementById('scan-video');
-
-    codeReader.listVideoInputDevices()
-      .then(devices => {
-        if (devices.length === 0) {
-          throw new Error('カメラが見つかりません');
+    loadZXing()
+      .then(() => {
+        if (!codeReader) {
+          codeReader = new ZXing.BrowserMultiFormatReader();
         }
-        const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
-
-        scanning = true;
-        return codeReader.decodeFromVideoDevice(
-          backCam.deviceId,
-          videoEl,
-          (result, err) => {
-            if (result) {
-              const code = result.getText();
-              stopScan();
-              lookupItem(code);
-            }
-            if (err && !(err instanceof ZXing.NotFoundException)) {
-              console.error('Scan error:', err);
-            }
-          }
-        );
+        return codeReader.listVideoInputDevices();
       })
+      .then(startScanWithDevices)
       .catch(err => {
-        console.error('Camera error:', err);
+        console.error('Camera/ZXing error:', err);
         scanning = false;
         goToManual(true);
       });
+  }
+
+  function startScanWithDevices(devices) {
+    if (devices.length === 0) {
+      throw new Error('カメラが見つかりません');
+    }
+    const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
+    const videoEl = document.getElementById('scan-video');
+
+    scanning = true;
+    codeReader.decodeFromVideoDevice(
+      backCam.deviceId,
+      videoEl,
+      (result, err) => {
+        if (result) {
+          const code = result.getText();
+          stopScan();
+          lookupItem(code);
+        }
+        if (err && !(err instanceof ZXing.NotFoundException)) {
+          console.error('Scan error:', err);
+        }
+      }
+    );
   }
 
   function stopScan() {
