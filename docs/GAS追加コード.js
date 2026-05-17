@@ -252,3 +252,63 @@ function getTransactionHistory() {
 //       return getAllLots();
 //     case 'getTransactionHistory':
 //       return getTransactionHistory();
+//     case 'registerItem':
+//       return registerItem(params);
+
+
+// ===== 7. 新規API: registerItem (商品登録) =====
+
+/**
+ * M_品目シートに新規商品を登録する
+ * @param {Object} params - 商品情報
+ * @returns {Object} { success: true, data: { 品目ID: "ITxxx" } }
+ */
+function registerItem(params) {
+  var auth = params.gmail ? requireGmailAuth(params.gmail) : requireAuth();
+
+  if (!params['品名']) throw new Error('品名は必須です');
+  if (!params['大カテゴリ']) throw new Error('大カテゴリは必須です');
+  if (!params['単位']) throw new Error('単位は必須です');
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('M_品目');
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+
+  // 品目IDの自動採番: 既存の最大IDから+1
+  var maxNum = 0;
+  var idCol = headers.indexOf('品目ID');
+  for (var i = 1; i < data.length; i++) {
+    var id = String(data[i][idCol] || '');
+    var match = id.match(/^IT(\d+)$/);
+    if (match) {
+      var num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  var newId = 'IT' + String(maxNum + 1).padStart(3, '0');
+
+  // 行データを作成（ヘッダー順）
+  var newRow = headers.map(function(h) {
+    switch (h) {
+      case '品目ID': return newId;
+      case 'バーコード': return params['バーコード'] || '';
+      case '品名': return params['品名'];
+      case '大カテゴリ': return params['大カテゴリ'];
+      case '中カテゴリ': return params['中カテゴリ'] || '';
+      case '単位': return params['単位'];
+      case '標準単価': return Number(params['標準単価']) || 0;
+      case '販売単価': return Number(params['販売単価']) || 0;
+      case 'ロット管理': return params['ロット管理'] === 'TRUE';
+      case '賞味期限管理': return params['賞味期限管理'] === 'TRUE';
+      case '税率': return Number(params['税率']) || 8;
+      case '閾値': return params['閾値'] ? Number(params['閾値']) : '';
+      case '主場所ID': return params['主場所ID'] || '';
+      case '有効': return true;
+      default: return '';
+    }
+  });
+
+  sheet.appendRow(newRow);
+
+  return { success: true, data: { '品目ID': newId } };
+}

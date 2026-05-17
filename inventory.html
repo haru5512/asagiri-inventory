@@ -54,6 +54,108 @@
     <footer class="page-footer">
       <span id="row-count">表示: 0件</span>
     </footer>
+
+    <!-- Item Registration Modal -->
+    <div id="modal-overlay" class="modal-overlay" style="display:none;" onclick="Inv.closeModalOnOverlay(event)">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>商品登録</h2>
+          <button class="modal-close" onclick="Inv.closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <div class="form-field">
+              <label>品名 <span class="required">*</span></label>
+              <input type="text" id="reg-name" placeholder="品名を入力">
+            </div>
+            <div class="form-field">
+              <label>バーコード</label>
+              <input type="text" id="reg-barcode" placeholder="JAN or 自社QR">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>大カテゴリ <span class="required">*</span></label>
+              <select id="reg-category">
+                <option value="">選択してください</option>
+                <option value="原料">原料</option>
+                <option value="加工品">加工品</option>
+                <option value="備品">備品</option>
+                <option value="消耗品">消耗品</option>
+                <option value="完成品">完成品</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>中カテゴリ</label>
+              <input type="text" id="reg-subcategory" placeholder="自由入力">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>単位 <span class="required">*</span></label>
+              <select id="reg-unit">
+                <option value="">選択してください</option>
+                <option value="個">個</option>
+                <option value="kg">kg</option>
+                <option value="本">本</option>
+                <option value="箱">箱</option>
+                <option value="袋">袋</option>
+                <option value="枚">枚</option>
+                <option value="缶">缶</option>
+                <option value="パック">パック</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>税率 <span class="required">*</span></label>
+              <select id="reg-tax">
+                <option value="8">8%</option>
+                <option value="10">10%</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>標準単価</label>
+              <input type="number" id="reg-cost" placeholder="0" min="0">
+            </div>
+            <div class="form-field">
+              <label>販売単価</label>
+              <input type="number" id="reg-price" placeholder="0" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>主場所</label>
+              <select id="reg-location">
+                <option value="">指定なし</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>閾値（在庫アラート）</label>
+              <input type="number" id="reg-threshold" placeholder="未設定" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="checkbox-label">
+                <input type="checkbox" id="reg-lot"> ロット管理する
+              </label>
+            </div>
+            <div class="form-field">
+              <label class="checkbox-label">
+                <input type="checkbox" id="reg-expiry"> 賞味期限管理する
+              </label>
+            </div>
+          </div>
+          <div id="reg-message" class="reg-message" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="Inv.closeModal()">キャンセル</button>
+          <button class="btn-fetch" id="btn-reg-continue" onclick="Inv.registerItem(true)">登録して続けて入力</button>
+          <button class="btn-fetch" id="btn-reg-close" onclick="Inv.registerItem(false)">登録して閉じる</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="./config.js"></script>

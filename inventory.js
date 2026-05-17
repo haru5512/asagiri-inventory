@@ -193,6 +193,11 @@ const Inv = (() => {
     container.appendChild(el('button', {
       className: 'btn-fetch', id: 'btn-fetch', onClick: fetchData
     }, 'データ取得'));
+    if (currentTab === 'stock') {
+      container.appendChild(el('button', {
+        className: 'btn-register', id: 'btn-register', onClick: openModal
+      }, '+ 新規登録'));
+    }
     bindFilterEvents();
   }
 
@@ -390,6 +395,146 @@ const Inv = (() => {
     }
   }
 
+  // --- Modal ---
+  let locationCache = null;
+
+  function openModal() {
+    clearForm();
+    loadLocations();
+    document.getElementById('modal-overlay').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    clearForm();
+  }
+
+  function closeModalOnOverlay(event) {
+    if (event.target === event.currentTarget) closeModal();
+  }
+
+  function clearForm() {
+    document.getElementById('reg-name').value = '';
+    document.getElementById('reg-barcode').value = '';
+    document.getElementById('reg-category').value = '';
+    document.getElementById('reg-subcategory').value = '';
+    document.getElementById('reg-unit').value = '';
+    document.getElementById('reg-tax').value = '8';
+    document.getElementById('reg-cost').value = '';
+    document.getElementById('reg-price').value = '';
+    document.getElementById('reg-location').value = '';
+    document.getElementById('reg-threshold').value = '';
+    document.getElementById('reg-lot').checked = false;
+    document.getElementById('reg-expiry').checked = false;
+    const msg = document.getElementById('reg-message');
+    msg.style.display = 'none';
+    msg.textContent = '';
+    msg.className = 'reg-message';
+  }
+
+  function showRegMessage(text, isError) {
+    const msg = document.getElementById('reg-message');
+    msg.textContent = text;
+    msg.className = 'reg-message ' + (isError ? 'error' : 'success');
+    msg.style.display = 'block';
+  }
+
+  async function loadLocations() {
+    const select = document.getElementById('reg-location');
+    if (locationCache) {
+      populateLocationSelect(select, locationCache);
+      return;
+    }
+    if (!isApiConfigured()) return;
+    try {
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const url = getApiUrl() + '?action=getLocations&gmail=' + encodeURIComponent(gmail) + '&password=' + encodeURIComponent(password);
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (json.success && json.data) {
+        locationCache = json.data;
+        populateLocationSelect(select, locationCache);
+      }
+    } catch (e) {
+      console.error('場所一覧の取得に失敗:', e);
+    }
+  }
+
+  function populateLocationSelect(select, locations) {
+    select.textContent = '';
+    select.appendChild(el('option', { value: '' }, '指定なし'));
+    for (const loc of locations) {
+      select.appendChild(el('option', { value: loc['場所ID'] }, loc['場所名']));
+    }
+  }
+
+  async function registerItem(continueInput) {
+    const name = document.getElementById('reg-name').value.trim();
+    const category = document.getElementById('reg-category').value;
+    const unit = document.getElementById('reg-unit').value;
+
+    if (!name) { showRegMessage('品名を入力してください', true); return; }
+    if (!category) { showRegMessage('大カテゴリを選択してください', true); return; }
+    if (!unit) { showRegMessage('単位を選択してください', true); return; }
+
+    const btnContinue = document.getElementById('btn-reg-continue');
+    const btnClose = document.getElementById('btn-reg-close');
+    btnContinue.disabled = true;
+    btnClose.disabled = true;
+
+    try {
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const params = new URLSearchParams({
+        action: 'registerItem',
+        gmail: gmail,
+        password: password,
+        品名: name,
+        バーコード: document.getElementById('reg-barcode').value.trim(),
+        大カテゴリ: category,
+        中カテゴリ: document.getElementById('reg-subcategory').value.trim(),
+        単位: unit,
+        標準単価: document.getElementById('reg-cost').value || '0',
+        販売単価: document.getElementById('reg-price').value || '0',
+        ロット管理: document.getElementById('reg-lot').checked ? 'TRUE' : 'FALSE',
+        賞味期限管理: document.getElementById('reg-expiry').checked ? 'TRUE' : 'FALSE',
+        税率: document.getElementById('reg-tax').value,
+        閾値: document.getElementById('reg-threshold').value || '',
+        主場所ID: document.getElementById('reg-location').value,
+      });
+
+      const url = getApiUrl() + '?' + params.toString();
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+
+      if (!json.success) throw new Error(json.error || '登録に失敗しました');
+
+      const itemId = json.data && json.data['品目ID'] ? json.data['品目ID'] : '';
+      showRegMessage('登録しました' + (itemId ? '（' + itemId + '）' : ''), false);
+
+      if (continueInput) {
+        document.getElementById('reg-name').value = '';
+        document.getElementById('reg-barcode').value = '';
+        document.getElementById('reg-subcategory').value = '';
+        document.getElementById('reg-cost').value = '';
+        document.getElementById('reg-price').value = '';
+        document.getElementById('reg-threshold').value = '';
+        document.getElementById('reg-lot').checked = false;
+        document.getElementById('reg-expiry').checked = false;
+        document.getElementById('reg-name').focus();
+      } else {
+        closeModal();
+        fetchData();
+      }
+    } catch (err) {
+      showRegMessage('エラー: ' + err.message, true);
+    } finally {
+      btnContinue.disabled = false;
+      btnClose.disabled = false;
+    }
+  }
+
   // --- Start ---
   init();
 
@@ -403,5 +548,5 @@ const Inv = (() => {
     rawData = { stock: [], lots: [], history: [] };
   }
 
-  return { switchTab, fetchData, login, logout };
+  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem };
 })();
