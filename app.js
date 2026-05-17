@@ -101,44 +101,58 @@ const App = (() => {
     alert('保存しました');
   }
 
-  // --- Gmail 管理 ---
+  // --- ログイン管理 ---
   function getGmail() {
     return localStorage.getItem('USER_GMAIL') || '';
   }
 
+  function getPassword() {
+    return localStorage.getItem('USER_PASSWORD') || '';
+  }
+
   function isGmailConfigured() {
     const gmail = getGmail();
-    return gmail && gmail.includes('@');
+    const pw = getPassword();
+    return gmail && gmail.includes('@') && pw;
   }
 
   function updateGmailStatus() {
     const gmailEl = document.getElementById('settings-gmail');
     const gmailInput = document.getElementById('input-gmail');
+    const pwInput = document.getElementById('input-password');
     if (isGmailConfigured()) {
-      gmailEl.textContent = getGmail();
+      gmailEl.textContent = getGmail() + '（ログイン済み）';
       gmailEl.className = 'setting-value connected';
       if (gmailInput) gmailInput.value = getGmail();
+      if (pwInput) pwInput.value = '';
     } else {
-      gmailEl.textContent = '未設定';
+      gmailEl.textContent = '未ログイン';
       gmailEl.className = 'setting-value not-connected';
       if (gmailInput) gmailInput.value = '';
+      if (pwInput) pwInput.value = '';
     }
   }
 
-  function saveGmail() {
-    const input = document.getElementById('input-gmail').value.trim();
-    if (!input || !input.includes('@')) {
+  function saveLogin() {
+    const gmail = document.getElementById('input-gmail').value.trim();
+    const password = document.getElementById('input-password').value;
+    if (!gmail || !gmail.includes('@')) {
       alert('正しいメールアドレスを入力してください。');
       return;
     }
-    localStorage.setItem('USER_GMAIL', input);
+    if (!password) {
+      alert('パスワードを入力してください。');
+      return;
+    }
+    localStorage.setItem('USER_GMAIL', gmail);
+    localStorage.setItem('USER_PASSWORD', password);
     updateGmailStatus();
-    alert('保存しました');
+    alert('ログイン情報を保存しました');
   }
 
   function requireGmail() {
     if (!isGmailConfigured()) {
-      alert('担当者メールが未設定です。\n設定画面からメールアドレスを入力してください。');
+      alert('ログインが必要です。\n設定画面からメールアドレスとパスワードを入力してください。');
       goToSettings();
       return false;
     }
@@ -442,6 +456,7 @@ const App = (() => {
       qty: qty,
       unit: currentItem['単位'] || '',
       gmail: getGmail(),
+      password: getPassword(),
     };
 
     if (currentOp === 'move') {
@@ -631,6 +646,8 @@ const App = (() => {
           移動先場所ID: data.toLocationId,
         };
       }
+
+      params.password = data.password;
 
       const query = Object.entries(params)
         .map(([k, v]) => k + '=' + encodeURIComponent(v))
@@ -911,7 +928,7 @@ const App = (() => {
     searchManual,
     lookupItem,
     saveApiUrl,
-    saveGmail,
+    saveLogin,
     reloadLocations,
     startOp,
     goToOpScan,

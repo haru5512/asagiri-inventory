@@ -18,6 +18,40 @@ body {
   background: var(--bg);
 }
 
+/* Login screen */
+.login-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.login-box {
+  background: var(--card-bg);
+  padding: 32px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  width: 100%;
+  max-width: 360px;
+}
+
+.login-box h1 {
+  color: var(--primary-dark);
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.login-box p {
+  color: var(--text-light);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.login-box .filter-group {
+  margin-bottom: 12px;
+}
+
 .page {
   max-width: 1200px;
   margin: 0 auto;

@@ -132,8 +132,39 @@ const Inv = (() => {
     ),
   };
 
+  // --- Login ---
+  function isLoggedIn() {
+    return localStorage.getItem('USER_GMAIL') && localStorage.getItem('USER_PASSWORD');
+  }
+
+  function login() {
+    const email = document.getElementById('login-email').value.trim();
+    const pw = document.getElementById('login-password').value;
+    if (!email || !email.includes('@')) {
+      alert('正しいメールアドレスを入力してください。');
+      return;
+    }
+    if (!pw) {
+      alert('パスワードを入力してください。');
+      return;
+    }
+    localStorage.setItem('USER_GMAIL', email);
+    localStorage.setItem('USER_PASSWORD', pw);
+    showMainPage();
+  }
+
+  function showMainPage() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-page').style.display = 'block';
+    const userEl = document.getElementById('login-user');
+    if (userEl) userEl.textContent = localStorage.getItem('USER_GMAIL') || '';
+  }
+
   // --- Init ---
   function init() {
+    if (isLoggedIn()) {
+      showMainPage();
+    }
     renderFilters();
     renderTableHead();
   }
@@ -338,7 +369,11 @@ const Inv = (() => {
     btn.textContent = '取得中...';
 
     try {
-      const url = getApiUrl() + '?action=' + config.api;
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const url = getApiUrl() + '?action=' + config.api
+        + '&gmail=' + encodeURIComponent(gmail)
+        + '&password=' + encodeURIComponent(password);
       const res = await fetch(url, { method: 'GET', redirect: 'follow' });
       const json = await res.json();
 
@@ -358,5 +393,5 @@ const Inv = (() => {
   // --- Start ---
   init();
 
-  return { switchTab, fetchData };
+  return { switchTab, fetchData, login };
 })();

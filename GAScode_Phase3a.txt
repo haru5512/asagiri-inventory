@@ -340,7 +340,7 @@ function requireAuth() {
  * Gmail パラメータで担当者を認証（PWA用簡易認証）
  * PWAから送られるgmailパラメータでM_担当者を照合する
  */
-function authenticateByGmail(gmail) {
+function authenticateByGmail(gmail, password) {
   if (!gmail) {
     return {
       authenticated: false,
@@ -357,6 +357,15 @@ function authenticateByGmail(gmail) {
       email: gmail,
     };
   }
+  // パスワード照合（M_担当者の「パスワード」列）
+  if (!password || String(user['パスワード']) !== String(password)) {
+    return {
+      authenticated: false,
+      reason: 'WRONG_PASSWORD',
+      message: 'パスワードが正しくありません',
+      email: gmail,
+    };
+  }
   return {
     authenticated: true,
     email: gmail,
@@ -370,10 +379,10 @@ function authenticateByGmail(gmail) {
 }
 
 /**
- * Gmail パラメータ必須チェック（PWA用）
+ * Gmail + パスワード必須チェック（PWA用）
  */
-function requireGmailAuth(gmail) {
-  const auth = authenticateByGmail(gmail);
+function requireGmailAuth(gmail, password) {
+  const auth = authenticateByGmail(gmail, password);
   if (!auth.authenticated) {
     throw new Error(auth.message);
   }
@@ -1174,7 +1183,7 @@ function appendInventoryRecord(record, auth) {
  * 入庫記録
  */
 function recordStockIn(input) {
-  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+  const auth = input.gmail ? requireGmailAuth(input.gmail, input.password) : requireAuth();
 
   if (!input.品目ID) throw new Error('品目IDが指定されていません');
   if (!input.数量 || input.数量 <= 0) {
@@ -1203,7 +1212,7 @@ function recordStockIn(input) {
  * 出庫(消費)記録
  */
 function recordStockOut(input) {
-  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+  const auth = input.gmail ? requireGmailAuth(input.gmail, input.password) : requireAuth();
 
   if (!input.品目ID) throw new Error('品目IDが指定されていません');
   if (!input.数量 || input.数量 <= 0) {
@@ -1237,7 +1246,7 @@ function recordStockOut(input) {
  * 関連トランIDで2レコードを紐付け
  */
 function recordStockMove(input) {
-  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+  const auth = input.gmail ? requireGmailAuth(input.gmail, input.password) : requireAuth();
 
   if (!input.品目ID) throw new Error('品目IDが指定されていません');
   if (!input.数量 || input.数量 <= 0) {
@@ -1713,7 +1722,7 @@ function generateLotId() {
  * @param {Object} input { 品目ID, ロット番号?, 仕入日, 賞味期限, 入庫数量, 備考? }
  */
 function registerLot(input) {
-  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+  const auth = input.gmail ? requireGmailAuth(input.gmail, input.password) : requireAuth();
 
   // バリデーション
   if (!input.品目ID) throw new Error('品目IDが指定されていません');
@@ -1855,7 +1864,7 @@ function allocateLotsByFIFO(品目ID, 必要数量) {
  * @param {Object} input { 品目ID, 数量, 場所ID?, 備考? }
  */
 function recordStockOutWithLot(input) {
-  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+  const auth = input.gmail ? requireGmailAuth(input.gmail, input.password) : requireAuth();
 
   if (!input.品目ID) throw new Error('品目IDが指定されていません');
   if (!input.数量 || input.数量 <= 0) {
@@ -2036,8 +2045,8 @@ function markExpiredLots() {
  * @param {string} ロットID 
  * @param {string} 廃棄理由 
  */
-function discardLot(ロットID, 廃棄理由, gmail) {
-  const auth = gmail ? requireGmailAuth(gmail) : requireAdmin();
+function discardLot(ロットID, 廃棄理由, gmail, password) {
+  const auth = gmail ? requireGmailAuth(gmail, password) : requireAdmin();
 
   if (!ロットID) throw new Error('ロットIDを指定してください');
   if (!廃棄理由) throw new Error('廃棄理由を入力してください');
@@ -2884,6 +2893,7 @@ function dispatchAction(action, params) {
     case 'recordStockIn':
       return recordStockIn({
         gmail: params.gmail,
+        password: params.password,
         品目ID: params.品目ID,
         数量: Number(params.数量),
         単価: params.単価 ? Number(params.単価) : undefined,
@@ -2893,6 +2903,7 @@ function dispatchAction(action, params) {
     case 'recordStockOut':
       return recordStockOut({
         gmail: params.gmail,
+        password: params.password,
         品目ID: params.品目ID,
         数量: Number(params.数量),
         場所ID: params.場所ID,
@@ -2901,6 +2912,7 @@ function dispatchAction(action, params) {
     case 'recordStockMove':
       return recordStockMove({
         gmail: params.gmail,
+        password: params.password,
         品目ID: params.品目ID,
         数量: Number(params.数量),
         場所ID: params.場所ID,
@@ -2933,6 +2945,7 @@ function dispatchAction(action, params) {
     case 'registerLot':
       return registerLot({
         gmail: params.gmail,
+        password: params.password,
         品目ID: params.品目ID,
         ロット番号: params.ロット番号,
         仕入日: params.仕入日,
@@ -2947,6 +2960,7 @@ function dispatchAction(action, params) {
     case 'recordStockOutWithLot':
       return recordStockOutWithLot({
         gmail: params.gmail,
+        password: params.password,
         品目ID: params.品目ID,
         数量: Number(params.数量),
         場所ID: params.場所ID,
@@ -2957,7 +2971,7 @@ function dispatchAction(action, params) {
     case 'markExpiredLots':
       return markExpiredLots();
     case 'discardLot':
-      return discardLot(params.ロットID, params.廃棄理由, params.gmail);
+      return discardLot(params.ロットID, params.廃棄理由, params.gmail, params.password);
 
     // === PC管理画面用 ===
     case 'getAllLots':
