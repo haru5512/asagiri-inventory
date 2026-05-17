@@ -1,0 +1,3029 @@
+/**
+ * 在庫管理システム - GAS基盤
+ * 設計書: zaiko_prototype_design_v0.6.md
+ * Phase 1-A: 初期化 + 共通ヘルパー
+ */
+
+// ===== 定数 =====
+const SHEETS = {
+  M_ITEM: 'M_品目',
+  M_USER: 'M_担当者',
+  M_LOCATION: 'M_場所',
+  M_DISCOUNT: 'M_値引',
+  M_FISCAL_YEAR: 'M_期情報',
+  T_INVENTORY: 'T_入出庫',
+  T_STOCKTAKE: 'T_棚卸',
+  T_SALES: 'T_販売',
+  T_CLOSING: 'T_締め',
+  V_CURRENT_STOCK: 'V_現在在庫',
+};
+
+const ID_PREFIX = {
+  ITEM: 'IT',
+  USER: 'ST',
+  LOCATION: 'LC',
+  DISCOUNT: 'DC',
+  FISCAL_YEAR: 'FY',
+  TRANSACTION: 'TR',
+  STOCKTAKE: 'SS',
+  SESSION: 'SES',
+  SALES: 'SL',
+  CLOSING: 'CL',
+};
+
+// ===== 初期化(最初に1回だけ実行する関数)=====
+
+/**
+ * スプシIDをスクリプトプロパティに保存
+ * 期切替時はこの値を更新するだけで参照先が切り替わる
+ */
+function setupSpreadsheetId() {
+  const SPREADSHEET_ID = '1Ou2FonmY2CZ_RdUWcAWFgOe42iZdJWyOanZzwdJbyic';
+  PropertiesService.getScriptProperties()
+    .setProperty('CURRENT_SPREADSHEET_ID', SPREADSHEET_ID);
+  Logger.log('スプシIDを保存しました: ' + SPREADSHEET_ID);
+}
+
+// ===== 共通ヘルパー =====
+
+/**
+ * 現在の有効スプシIDを取得
+ */
+function getCurrentSpreadsheetId() {
+  const id = PropertiesService.getScriptProperties()
+    .getProperty('CURRENT_SPREADSHEET_ID');
+  if (!id) {
+    throw new Error('スプシIDが未設定。setupSpreadsheetId() を先に実行してください。');
+  }
+  return id;
+}
+
+/**
+ * 現在の有効スプシを開く
+ */
+function getCurrentSpreadsheet() {
+  return SpreadsheetApp.openById(getCurrentSpreadsheetId());
+}
+
+/**
+ * 指定シートを取得
+ * @param {string} sheetName SHEETS定数を渡す
+ */
+function getSheet(sheetName) {
+  const sheet = getCurrentSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) {
+    throw new Error(`シート「${sheetName}」が見つかりません`);
+  }
+  return sheet;
+}
+
+/**
+ * シート全体のデータを取得(オブジェクト配列で返す)
+ * 1行目をヘッダーとして扱う
+ * @param {string} sheetName 
+ * @returns {Array<Object>} 例: [{品目ID: 'IT001', 品名: '...'}, ...]
+ */
+function getSheetData(sheetName) {
+  const sheet = getSheet(sheetName);
+  const range = sheet.getDataRange();
+  const values = range.getValues();
+  
+  if (values.length < 2) return [];
+  
+  const headers = values[0];
+  const rows = values.slice(1);
+  
+  return rows
+    .filter(row => row.some(cell => cell !== ''))  // 完全な空行を除外
+    .map(row => {
+      const obj = {};
+      headers.forEach((header, i) => {
+        obj[header] = row[i];
+      });
+      return obj;
+    });
+}
+
+/**
+ * ID自動採番
+ * @param {string} sheetName シート名
+ * @param {string} idColumnName ID列の名前(例: '品目ID')
+ * @param {string} prefix 接頭辞(例: 'IT')
+ * @returns {string} 次のID(例: 'IT002')
+ */
+function generateNextId(sheetName, idColumnName, prefix) {
+  const data = getSheetData(sheetName);
+  if (data.length === 0) {
+    return `${prefix}001`;
+  }
+  
+  // 既存IDから数値部分を抽出して最大値を取得
+  let maxNum = 0;
+  data.forEach(row => {
+    const id = String(row[idColumnName] || '');
+    const match = id.match(new RegExp(`^${prefix}(\\d+)$`));
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+  
+  // 3桁ゼロパディング、999超えたら桁数自動拡張
+  const nextNum = maxNum + 1;
+  const padded = String(nextNum).padStart(3, '0');
+  return `${prefix}${padded}`;
+}
+
+/**
+ * 日時を yyyy-MM-dd HH:mm 形式の文字列に整形
+ * @param {Date} date 
+ */
+function formatDateTime(date) {
+  if (!date) date = new Date();
+  return Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd HH:mm');
+}
+
+/**
+ * 日付を yyyy-MM-dd 形式の文字列に整形
+ */
+function formatDate(date) {
+  if (!date) date = new Date();
+  return Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd');
+}
+
+/**
+ * 取引IDを生成(日付ベース + 連番)
+ * 例: TR20260512-001
+ */
+function generateTransactionId() {
+  const today = formatDate().replace(/-/g, '');
+  const sheet = getSheet(SHEETS.T_INVENTORY);
+  const data = getSheetData(SHEETS.T_INVENTORY);
+  
+  // 今日の取引IDの最大連番を取得
+  let maxNum = 0;
+  const prefix = `${ID_PREFIX.TRANSACTION}${today}-`;
+  data.forEach(row => {
+    const id = String(row['トランID'] || '');
+    if (id.startsWith(prefix)) {
+      const numPart = id.substring(prefix.length);
+      const num = parseInt(numPart, 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    }
+  });
+  
+  const nextNum = String(maxNum + 1).padStart(3, '0');
+  return `${prefix}${nextNum}`;
+}
+
+// ===== テスト関数(動作確認用)=====
+
+/**
+ * 全機能の動作確認
+ * このセッション完了後、選択して実行ボタンで実行する
+ */
+function testPhase1A() {
+  Logger.log('===== Phase 1-A 動作確認開始 =====');
+  
+  try {
+    // 1. スプシID取得テスト
+    const spreadsheetId = getCurrentSpreadsheetId();
+    Logger.log('1. スプシID: ' + spreadsheetId);
+    
+    // 2. スプシ取得テスト
+    const ss = getCurrentSpreadsheet();
+    Logger.log('2. スプシ名: ' + ss.getName());
+    
+    // 3. 各シート取得テスト
+    Logger.log('3. シート一覧:');
+    Object.values(SHEETS).forEach(name => {
+      try {
+        const sheet = getSheet(name);
+        Logger.log(`   ✅ ${name}: ${sheet.getLastRow()}行`);
+      } catch (e) {
+        Logger.log(`   ❌ ${name}: ${e.message}`);
+      }
+    });
+    
+    // 4. データ取得テスト(M_品目)
+    const items = getSheetData(SHEETS.M_ITEM);
+    Logger.log(`4. M_品目データ件数: ${items.length}`);
+    if (items.length > 0) {
+      Logger.log(`   1件目: ${JSON.stringify(items[0])}`);
+    }
+    
+    // 5. データ取得テスト(M_担当者)
+    const users = getSheetData(SHEETS.M_USER);
+    Logger.log(`5. M_担当者データ件数: ${users.length}`);
+    if (users.length > 0) {
+      Logger.log(`   1件目: ${JSON.stringify(users[0])}`);
+    }
+    
+    // 6. ID採番テスト
+    const nextItemId = generateNextId(SHEETS.M_ITEM, '品目ID', ID_PREFIX.ITEM);
+    Logger.log(`6. 次の品目ID: ${nextItemId}`);
+    
+    const nextUserId = generateNextId(SHEETS.M_USER, '担当者ID', ID_PREFIX.USER);
+    Logger.log(`7. 次の担当者ID: ${nextUserId}`);
+    
+    // 8. 日時フォーマット
+    Logger.log(`8. 現在日時: ${formatDateTime()}`);
+    Logger.log(`9. 今日の日付: ${formatDate()}`);
+    
+    // 10. 取引ID生成
+    const txnId = generateTransactionId();
+    Logger.log(`10. 次の取引ID: ${txnId}`);
+    
+    Logger.log('===== ✅ Phase 1-A 全テスト成功 =====');
+  } catch (e) {
+    Logger.log('===== ❌ エラー発生 =====');
+    Logger.log('エラー: ' + e.message);
+    Logger.log('スタック: ' + e.stack);
+  }
+}// ============================================================
+// Phase 1-B: 認証機能
+// ============================================================
+
+/**
+ * 現在ログイン中のユーザーのGmailを取得
+ * GAS Web App のデプロイ設定で「Execute as: User accessing」が必要
+ * @returns {string} Gmail or 空文字
+ */
+function getCurrentUserEmail() {
+  return Session.getActiveUser().getEmail() || '';
+}
+
+/**
+ * Gmail から担当者情報を取得
+ * @param {string} email 
+ * @returns {Object|null} 担当者オブジェクト or null
+ */
+function findUserByEmail(email) {
+  if (!email) return null;
+  const users = getSheetData(SHEETS.M_USER);
+  return users.find(u => u['Gmail'] === email && u['有効'] === true) || null;
+}
+
+/**
+ * 認証処理(API呼び出し時の最初に必ず実行)
+ * @returns {Object} 認証結果
+ */
+function authenticate() {
+  const email = getCurrentUserEmail();
+  
+  if (!email) {
+    return {
+      authenticated: false,
+      reason: 'NOT_LOGGED_IN',
+      message: 'Googleアカウントでログインしてください',
+    };
+  }
+  
+  const user = findUserByEmail(email);
+  
+  if (!user) {
+    return {
+      authenticated: false,
+      reason: 'NOT_REGISTERED',
+      message: 'このアカウントは担当者マスターに登録されていません',
+      email: email,
+    };
+  }
+  
+  // 有効=FALSE は findUserByEmail で既に除外されているため、
+  // ここに到達したユーザーは全員「有効」
+  
+  return {
+    authenticated: true,
+    email: email,
+    userId: user['担当者ID'],
+    name: user['氏名'],
+    role: user['役割'],
+    isAdmin: user['役割'] === '管理者',
+    isStaff: user['役割'] === '現場',
+    isOffice: user['役割'] === '事務',
+  };
+}
+
+/**
+ * 管理者権限チェック(管理者専用APIの先頭で呼ぶ)
+ * @returns {Object} 認証結果
+ * @throws {Error} 管理者でない場合
+ */
+function requireAdmin() {
+  const auth = authenticate();
+  if (!auth.authenticated) {
+    throw new Error(`認証エラー: ${auth.message}`);
+  }
+  if (!auth.isAdmin) {
+    throw new Error('この操作には管理者権限が必要です');
+  }
+  return auth;
+}
+
+/**
+ * 認証必須チェック(全API共通)
+ * @returns {Object} 認証結果
+ * @throws {Error} 認証失敗時
+ */
+function requireAuth() {
+  const auth = authenticate();
+  if (!auth.authenticated) {
+    throw new Error(`認証エラー: ${auth.message}`);
+  }
+  return auth;
+}
+
+// ===== Phase 3a 追加: Gmail パラメータ認証（PWA用） =====
+
+/**
+ * Gmail パラメータで担当者を認証（PWA用簡易認証）
+ * PWAから送られるgmailパラメータでM_担当者を照合する
+ */
+function authenticateByGmail(gmail) {
+  if (!gmail) {
+    return {
+      authenticated: false,
+      reason: 'NO_GMAIL',
+      message: '担当者メールが未指定です',
+    };
+  }
+  const user = findUserByEmail(gmail);
+  if (!user) {
+    return {
+      authenticated: false,
+      reason: 'NOT_REGISTERED',
+      message: 'このメールアドレスは担当者マスターに登録されていません',
+      email: gmail,
+    };
+  }
+  return {
+    authenticated: true,
+    email: gmail,
+    userId: user['担当者ID'],
+    name: user['氏名'],
+    role: user['役割'],
+    isAdmin: user['役割'] === '管理者',
+    isStaff: user['役割'] === '現場',
+    isOffice: user['役割'] === '事務',
+  };
+}
+
+/**
+ * Gmail パラメータ必須チェック（PWA用）
+ */
+function requireGmailAuth(gmail) {
+  const auth = authenticateByGmail(gmail);
+  if (!auth.authenticated) {
+    throw new Error(auth.message);
+  }
+  return auth;
+}
+
+// ===== Phase 1-B テスト関数 =====
+
+function testPhase1B() {
+  Logger.log('===== Phase 1-B 動作確認開始 =====');
+  
+  try {
+    // 1. 現在のユーザーGmail取得
+    const email = getCurrentUserEmail();
+    Logger.log(`1. 現在のGmail: ${email}`);
+    
+    if (!email) {
+      Logger.log('⚠ Gmailが取得できませんでした(GASエディタからの直接実行では取得できる想定)');
+    }
+    
+    // 2. Gmailから担当者検索
+    const user = findUserByEmail(email);
+    Logger.log(`2. 担当者検索結果: ${JSON.stringify(user)}`);
+    
+    // 3. 認証処理
+    const auth = authenticate();
+    Logger.log(`3. 認証結果:`);
+    Logger.log(`   authenticated: ${auth.authenticated}`);
+    Logger.log(`   email: ${auth.email}`);
+    Logger.log(`   userId: ${auth.userId}`);
+    Logger.log(`   name: ${auth.name}`);
+    Logger.log(`   role: ${auth.role}`);
+    Logger.log(`   isAdmin: ${auth.isAdmin}`);
+    
+    // 4. 管理者権限チェック
+    try {
+      const adminAuth = requireAdmin();
+      Logger.log(`4. 管理者権限チェック: ✅ 通過 (${adminAuth.name})`);
+    } catch (e) {
+      Logger.log(`4. 管理者権限チェック: ❌ ${e.message}`);
+    }
+    
+    // 5. 認証必須チェック
+    try {
+      const reqAuth = requireAuth();
+      Logger.log(`5. 認証必須チェック: ✅ 通過 (${reqAuth.name})`);
+    } catch (e) {
+      Logger.log(`5. 認証必須チェック: ❌ ${e.message}`);
+    }
+    
+    // 6. 存在しないGmailで検索(エラーケーステスト)
+    const fakeUser = findUserByEmail('fake@example.com');
+    Logger.log(`6. 存在しないGmail検索: ${fakeUser === null ? '✅ nullが返る(正常)' : '❌ 何か返ってきた'}`);
+    
+    Logger.log('===== ✅ Phase 1-B テスト完了 =====');
+  } catch (e) {
+    Logger.log('===== ❌ エラー発生 =====');
+    Logger.log('エラー: ' + e.message);
+    Logger.log('スタック: ' + e.stack);
+  }
+}// ============================================================
+// Phase 1-C: マスター取得API
+// ============================================================
+
+/**
+ * 有効な品目一覧を取得
+ * カテゴリでフィルタ可能
+ * @param {Object} options { category?: string }
+ * @returns {Array<Object>} 品目配列
+ */
+function getItems(options) {
+  options = options || {};
+  // requireAuth(); // Phase 3a: PWAからの呼び出し対応で認証を外す
+  
+  const items = getSheetData(SHEETS.M_ITEM)
+    .filter(item => item['有効'] === true);
+  
+  if (options.category) {
+    return items.filter(item => item['大カテゴリ'] === options.category);
+  }
+  
+  return items;
+}
+
+/**
+ * 品目IDで1件取得
+ * @param {string} itemId 
+ * @returns {Object|null}
+ */
+function getItemById(itemId) {
+  // requireAuth(); // Phase 3a: 内部関数としても使われるため認証を外す
+  if (!itemId) return null;
+  
+  const items = getSheetData(SHEETS.M_ITEM);
+  return items.find(item => item['品目ID'] === itemId) || null;
+}
+
+/**
+ * バーコードで品目を検索(スキャン入力時に使用)
+ * @param {string} barcode JANコード or 自社QR
+ * @returns {Object|null} 品目情報 or null
+ */
+function findItemByBarcode(barcode) {
+
+  if (!barcode) return null;
+  
+  const code = String(barcode).trim();
+  if (!code) return null;
+  
+  const items = getSheetData(SHEETS.M_ITEM);
+  
+  // バーコード列で検索(完全一致、有効品のみ)
+  const found = items.find(item => 
+    String(item['バーコード']).trim() === code && item['有効'] === true
+  );
+  
+  if (found) return found;
+  
+  // バーコード未登録の場合、品目IDでの直接検索もトライ
+  // (自社QRに品目IDをそのまま埋め込んでいるケース対応)
+  return items.find(item => 
+    item['品目ID'] === code && item['有効'] === true
+  ) || null;
+}
+
+/**
+ * 大カテゴリ一覧を取得(品目選択UIのタブに使用)
+ * @returns {Array<string>} カテゴリ名の配列
+ */
+function getCategories() {
+  requireAuth();
+  
+  const items = getSheetData(SHEETS.M_ITEM)
+    .filter(item => item['有効'] === true);
+  
+  const categories = new Set();
+  items.forEach(item => {
+    if (item['大カテゴリ']) categories.add(item['大カテゴリ']);
+  });
+  
+  return Array.from(categories).sort();
+}
+
+/**
+ * 有効な担当者一覧を取得(管理者専用)
+ * 個人情報を含むので管理者のみアクセス可
+ * @returns {Array<Object>}
+ */
+function getUsers() {
+  requireAdmin();
+  
+  return getSheetData(SHEETS.M_USER)
+    .filter(user => user['有効'] === true);
+}
+
+/**
+ * 有効な場所一覧を取得
+ * @returns {Array<Object>}
+ */
+function getLocations() {
+  // requireAuth(); // Phase 3a: PWAからの呼び出し対応で認証を外す
+
+  const locations = getSheetData(SHEETS.M_LOCATION);
+  // 場所マスターには「有効」列がないので全件返す
+  return locations;
+}
+
+/**
+ * 有効な値引マスター一覧を取得(将来POS用)
+ * @returns {Array<Object>}
+ */
+function getDiscounts() {
+  requireAuth();
+  
+  return getSheetData(SHEETS.M_DISCOUNT)
+    .filter(d => d['有効'] === true);
+}
+
+/**
+ * 現在の有効期情報を取得
+ * @returns {Object|null}
+ */
+function getCurrentFiscalYear() {
+  requireAuth();
+  
+  const fyList = getSheetData(SHEETS.M_FISCAL_YEAR);
+  return fyList.find(fy => fy['ステータス'] === '進行中') || null;
+}
+
+// ===== Phase 1-C テスト関数 =====
+
+function testPhase1C() {
+  Logger.log('===== Phase 1-C 動作確認開始 =====');
+  
+  try {
+    // 1. 品目一覧取得(全件)
+    const items = getItems();
+    Logger.log(`1. 有効品目一覧: ${items.length}件`);
+    if (items.length > 0) {
+      Logger.log(`   1件目: ${items[0]['品名']} (${items[0]['品目ID']})`);
+    }
+    
+    // 2. カテゴリ別に絞り込み
+    const consumables = getItems({ category: '消耗品' });
+    Logger.log(`2. 消耗品カテゴリ: ${consumables.length}件`);
+    
+    // 3. 品目IDで取得
+    const item = getItemById('IT001');
+    Logger.log(`3. IT001取得: ${item ? item['品名'] : 'null'}`);
+    
+    // 4. 存在しない品目ID
+    const noItem = getItemById('IT999');
+    Logger.log(`4. IT999取得: ${noItem === null ? '✅ null(正常)' : '❌'}`);
+    
+    // 5. バーコードで検索(IT001は品目IDで自社QR想定)
+    const byBarcode = findItemByBarcode('IT001');
+    Logger.log(`5. バーコード"IT001"検索: ${byBarcode ? byBarcode['品名'] : 'null'}`);
+    
+    // 6. 存在しないバーコード
+    const noBarcode = findItemByBarcode('9999999999');
+    Logger.log(`6. 不明バーコード検索: ${noBarcode === null ? '✅ null(正常)' : '❌'}`);
+    
+    // 7. カテゴリ一覧
+    const categories = getCategories();
+    Logger.log(`7. カテゴリ一覧: ${JSON.stringify(categories)}`);
+    
+    // 8. 担当者一覧(管理者権限)
+    const users = getUsers();
+    Logger.log(`8. 有効担当者: ${users.length}件`);
+    if (users.length > 0) {
+      Logger.log(`   1件目: ${users[0]['氏名']} (${users[0]['役割']})`);
+    }
+    
+    // 9. 場所一覧
+    const locations = getLocations();
+    Logger.log(`9. 場所一覧: ${locations.length}件`);
+    locations.forEach(loc => {
+      Logger.log(`   - ${loc['場所名']} (${loc['種別']})`);
+    });
+    
+    // 10. 値引マスター(空のはず)
+    const discounts = getDiscounts();
+    Logger.log(`10. 有効値引: ${discounts.length}件 ${discounts.length === 0 ? '(まだ未登録、正常)' : ''}`);
+    
+    // 11. 現在の期
+    const fy = getCurrentFiscalYear();
+    Logger.log(`11. 現在の期: ${fy ? fy['期名称'] + ' (' + fy['期ID'] + ')' : 'なし'}`);
+    
+    Logger.log('===== ✅ Phase 1-C テスト完了 =====');
+  } catch (e) {
+    Logger.log('===== ❌ エラー発生 =====');
+    Logger.log('エラー: ' + e.message);
+    Logger.log('スタック: ' + e.stack);
+  }
+}// ============================================================
+// Phase 1-C 追加: 品名検索
+// ============================================================
+
+/**
+ * 品名で品目を検索(部分一致、大文字小文字無視)
+ * @param {string} keyword 検索キーワード
+ * @param {Object} options { category?: string, limit?: number }
+ * @returns {Array<Object>}
+ */
+function searchItemsByName(keyword, options) {
+  options = options || {};
+  requireAuth();
+  
+  if (!keyword) return [];
+  const kw = String(keyword).trim().toLowerCase();
+  if (!kw) return [];
+  
+  let items = getSheetData(SHEETS.M_ITEM)
+    .filter(item => item['有効'] === true);
+  
+  if (options.category) {
+    items = items.filter(item => item['大カテゴリ'] === options.category);
+  }
+  
+  const matched = items.filter(item => {
+    const name = String(item['品名'] || '').toLowerCase();
+    const subCat = String(item['中カテゴリ'] || '').toLowerCase();
+    const barcode = String(item['バーコード'] || '').toLowerCase();
+    const itemId = String(item['品目ID'] || '').toLowerCase();
+    return name.includes(kw) || subCat.includes(kw) || 
+           barcode.includes(kw) || itemId.includes(kw);
+  });
+  
+  matched.sort((a, b) => {
+    const aName = String(a['品名'] || '').toLowerCase();
+    const bName = String(b['品名'] || '').toLowerCase();
+    const aStartsWith = aName.startsWith(kw) ? 0 : 1;
+    const bStartsWith = bName.startsWith(kw) ? 0 : 1;
+    if (aStartsWith !== bStartsWith) return aStartsWith - bStartsWith;
+    return aName.localeCompare(bName);
+  });
+  
+  return matched.slice(0, options.limit || 50);
+}
+
+/**
+ * 品名検索の動作確認(独立したテスト関数)
+ */
+function testSearchItems() {
+  Logger.log('===== 品名検索テスト開始 =====');
+  
+  try {
+    // 1. 品名で部分一致検索
+    const r1 = searchItemsByName('ジュース');
+    Logger.log(`1. "ジュース"検索: ${r1.length}件`);
+    r1.forEach(i => Logger.log(`   - ${i['品名']} (${i['品目ID']})`));
+    
+    // 2. 中カテゴリにヒット
+    const r2 = searchItemsByName('キャップ');
+    Logger.log(`2. "キャップ"検索: ${r2.length}件`);
+    
+    // 3. カテゴリ絞り込み併用
+    const r3 = searchItemsByName('ジュース', { category: '消耗品' });
+    Logger.log(`3. "ジュース" × 消耗品: ${r3.length}件`);
+    
+    // 4. 該当なし
+    const r4 = searchItemsByName('ハンバーグ');
+    Logger.log(`4. "ハンバーグ"検索: ${r4.length}件 (期待値:0)`);
+    
+    // 5. 空文字
+    const r5 = searchItemsByName('');
+    Logger.log(`5. 空文字検索: ${r5.length}件 (期待値:0)`);
+    
+    Logger.log('===== ✅ 品名検索テスト完了 =====');
+  } catch (e) {
+    Logger.log('❌ エラー: ' + e.message);
+  }
+}// ============================================================
+// Phase 1-D: 入出庫API
+// ============================================================
+
+/**
+ * 入出庫レコードを T_入出庫 に追記する内部関数
+ * LockService で同時書き込みを防止
+ * @param {Object} record { 区分, 品目ID, 数量, 単価, 場所ID, 備考, 関連トランID, ステータス }
+ * @param {Object} auth 認証結果(authenticate() の戻り値)
+ * @returns {Object} 追加されたレコード(トランID付き)
+ */
+function appendInventoryRecord(record, auth) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です。少し待ってから再試行してください。');
+  }
+  
+  try {
+    const sheet = getSheet(SHEETS.T_INVENTORY);
+    
+    // トランID自動採番
+    const txnId = generateTransactionId();
+    const now = formatDateTime();
+    
+    // T_入出庫の列順:
+    // トランID / 日時 / 区分 / 品目ID / 数量 / 単価 / 場所ID / Gmail / 備考 / 関連トランID / ステータス
+    const row = [
+      txnId,
+      now,
+      record.区分,
+      record.品目ID,
+      record.数量,
+      record.単価 || '',
+      record.場所ID || '',
+      auth.email,
+      record.備考 || '',
+      record.関連トランID || '',
+      record.ステータス || '確定',
+    ];
+    
+    sheet.appendRow(row);
+    
+    return {
+      success: true,
+      トランID: txnId,
+      日時: now,
+      区分: record.区分,
+      品目ID: record.品目ID,
+      数量: record.数量,
+      Gmail: auth.email,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 入庫記録
+ * @param {Object} input { 品目ID, 数量, 単価?, 場所ID?, 備考? }
+ */
+function recordStockIn(input) {
+  const auth = requireAuth();
+  
+  // バリデーション
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (!input.数量 || input.数量 <= 0) {
+    throw new Error('数量は正の数を指定してください(入庫)');
+  }
+  
+  // 品目存在チェック
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  if (!item['有効']) throw new Error(`品目 ${item['品名']} は無効化されています`);
+  
+  // 単価未指定なら品目マスターの標準単価を使う
+  const unitPrice = input.単価 || item['標準単価'] || '';
+  // 場所未指定なら品目マスターの主場所を使う
+  const locationId = input.場所ID || item['主場所ID'] || '';
+  
+  return appendInventoryRecord({
+    区分: '入庫',
+    品目ID: input.品目ID,
+    数量: input.数量,  // 入庫は正の数
+    単価: unitPrice,
+    場所ID: locationId,
+    備考: input.備考 || '',
+    ステータス: '確定',
+  }, auth);
+}
+
+/**
+ * 出庫(消費)記録
+ * @param {Object} input { 品目ID, 数量, 場所ID?, 備考? }
+ */
+function recordStockOut(input) {
+  const auth = requireAuth();
+  
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (!input.数量 || input.数量 <= 0) {
+    throw new Error('数量は正の数を指定してください(出庫数を入力)');
+  }
+  
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  if (!item['有効']) throw new Error(`品目 ${item['品名']} は無効化されています`);
+  
+  // 在庫不足警告(エラーにはしない、現場の状況優先)
+  const currentStock = getCurrentStockByItemId(input.品目ID);
+  if (currentStock < input.数量) {
+    Logger.log(`⚠ 在庫不足: ${item['品名']} 現在${currentStock} → 出庫${input.数量}`);
+  }
+  
+  const locationId = input.場所ID || item['主場所ID'] || '';
+  
+  return appendInventoryRecord({
+    区分: '出庫消費',
+    品目ID: input.品目ID,
+    数量: -input.数量,  // 出庫は負の数で記録
+    単価: '',
+    場所ID: locationId,
+    備考: input.備考 || '',
+    ステータス: '確定',
+  }, auth);
+}
+
+/**
+ * 棚卸調整(管理者のみ)
+ * 棚卸後、帳簿と実在庫の差異を記録するために使用
+ */
+function recordStocktakeAdjustment(input) {
+  const auth = requireAdmin();
+  
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (input.数量 === undefined || input.数量 === null || input.数量 === 0) {
+    throw new Error('調整数量を指定してください(増加=正、減少=負)');
+  }
+  
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  
+  return appendInventoryRecord({
+    区分: '棚卸調整',
+    品目ID: input.品目ID,
+    数量: input.数量,
+    単価: '',
+    場所ID: input.場所ID || item['主場所ID'] || '',
+    備考: input.備考 || '棚卸差異の調整',
+    ステータス: '確定',
+  }, auth);
+}
+
+/**
+ * 訂正申請(現場が間違いを発見した時)
+ * ステータス=申請中 で記録 → 管理者の承認待ち
+ * @param {Object} input { 元トランID, 数量, 理由 }
+ */
+function requestCorrection(input) {
+  const auth = requireAuth();
+  
+  if (!input.元トランID) throw new Error('元のトランIDを指定してください');
+  if (input.数量 === undefined || input.数量 === null || input.数量 === 0) {
+    throw new Error('訂正数量を指定してください');
+  }
+  if (!input.理由) throw new Error('訂正理由を必須入力してください');
+  
+  // 元レコードの存在確認
+  const original = findInventoryById(input.元トランID);
+  if (!original) {
+    throw new Error(`元のトランID ${input.元トランID} が見つかりません`);
+  }
+  
+  return appendInventoryRecord({
+    区分: '訂正',
+    品目ID: original.品目ID,
+    数量: input.数量,
+    単価: '',
+    場所ID: original.場所ID,
+    備考: `訂正理由: ${input.理由}`,
+    関連トランID: input.元トランID,
+    ステータス: '申請中',  // 管理者承認待ち
+  }, auth);
+}
+
+/**
+ * 訂正承認(管理者のみ)
+ * @param {string} 訂正トランID 
+ */
+function approveCorrection(訂正トランID) {
+  const auth = requireAdmin();
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です。');
+  }
+  
+  try {
+    const sheet = getSheet(SHEETS.T_INVENTORY);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const txnIdCol = headers.indexOf('トランID');
+    const statusCol = headers.indexOf('ステータス');
+    const remarksCol = headers.indexOf('備考');
+    
+    // 該当行を検索
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][txnIdCol] === 訂正トランID) {
+        if (data[i][statusCol] !== '申請中') {
+          throw new Error(`このトランは既に処理済みです(現状: ${data[i][statusCol]})`);
+        }
+        // ステータスを承認済に更新
+        sheet.getRange(i + 1, statusCol + 1).setValue('承認済');
+        // 備考に承認情報を追記
+        const oldRemarks = data[i][remarksCol] || '';
+        const newRemarks = `${oldRemarks} [承認: ${auth.name} ${formatDateTime()}]`;
+        sheet.getRange(i + 1, remarksCol + 1).setValue(newRemarks);
+        
+        return { success: true, トランID: 訂正トランID, ステータス: '承認済' };
+      }
+    }
+    throw new Error(`トランID ${訂正トランID} が見つかりません`);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 訂正却下(管理者のみ)
+ */
+function rejectCorrection(訂正トランID, 却下理由) {
+  const auth = requireAdmin();
+  if (!却下理由) throw new Error('却下理由を入力してください');
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です。');
+  }
+  
+  try {
+    const sheet = getSheet(SHEETS.T_INVENTORY);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const txnIdCol = headers.indexOf('トランID');
+    const statusCol = headers.indexOf('ステータス');
+    const remarksCol = headers.indexOf('備考');
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][txnIdCol] === 訂正トランID) {
+        if (data[i][statusCol] !== '申請中') {
+          throw new Error(`このトランは既に処理済みです(現状: ${data[i][statusCol]})`);
+        }
+        sheet.getRange(i + 1, statusCol + 1).setValue('却下');
+        const oldRemarks = data[i][remarksCol] || '';
+        const newRemarks = `${oldRemarks} [却下: ${auth.name} ${formatDateTime()} 理由: ${却下理由}]`;
+        sheet.getRange(i + 1, remarksCol + 1).setValue(newRemarks);
+        
+        return { success: true, トランID: 訂正トランID, ステータス: '却下' };
+      }
+    }
+    throw new Error(`トランID ${訂正トランID} が見つかりません`);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * トランIDでレコード検索
+ */
+function findInventoryById(トランID) {
+  const data = getSheetData(SHEETS.T_INVENTORY);
+  return data.find(row => row['トランID'] === トランID) || null;
+}
+
+/**
+ * 品目IDの現在在庫数を取得
+ * 計算: 確定 or 承認済のレコードの数量合計、却下/申請中は除外
+ * @param {string} 品目ID 
+ * @returns {number}
+ */
+function getCurrentStockByItemId(品目ID) {
+  // requireAuth(); // Phase 3a: 内部関数としても使われるため認証を外す
+
+  const data = getSheetData(SHEETS.T_INVENTORY);
+  return data
+    .filter(row => row['品目ID'] === 品目ID)
+    .filter(row => row['ステータス'] === '確定' || row['ステータス'] === '承認済')
+    .reduce((sum, row) => sum + (Number(row['数量']) || 0), 0);
+}
+
+/**
+ * 全品目の現在在庫を一覧で取得
+ * @returns {Array<Object>} [{品目ID, 品名, 大カテゴリ, 単位, 現在在庫数, 閾値, アラート}]
+ */
+function getCurrentStockList() {
+  // requireAuth(); // Phase 3a: PWA/PC管理画面からの呼び出し対応
+  
+  const items = getItems();
+  return items.map(item => {
+    const stock = getCurrentStockByItemId(item['品目ID']);
+    const threshold = Number(item['閾値']) || 0;
+    return {
+      品目ID: item['品目ID'],
+      品名: item['品名'],
+      大カテゴリ: item['大カテゴリ'],
+      単位: item['単位'],
+      現在在庫数: stock,
+      閾値: threshold,
+      アラート: threshold > 0 && stock < threshold ? '⚠ 閾値割れ' : '',
+    };
+  });
+}
+
+// ===== Phase 1-D テスト関数 =====
+
+function testPhase1D() {
+  Logger.log('===== Phase 1-D 動作確認開始 =====');
+  
+  try {
+    // 1. 現在在庫の確認(初期 = 500のはず)
+    const initialStock = getCurrentStockByItemId('IT001');
+    Logger.log(`1. IT001 初期在庫: ${initialStock}個`);
+    
+    // 2. 入庫テスト(+100)
+    const result1 = recordStockIn({
+      品目ID: 'IT001',
+      数量: 100,
+      単価: 12,
+      備考: 'テスト入庫',
+    });
+    Logger.log(`2. 入庫結果: ${JSON.stringify(result1)}`);
+    
+    // 3. 在庫確認(600になっているはず)
+    const stockAfterIn = getCurrentStockByItemId('IT001');
+    Logger.log(`3. 入庫後在庫: ${stockAfterIn}個 (期待値: ${initialStock + 100})`);
+    
+    // 4. 出庫テスト(-30)
+    const result2 = recordStockOut({
+      品目ID: 'IT001',
+      数量: 30,
+      備考: 'テスト出庫',
+    });
+    Logger.log(`4. 出庫結果: ${JSON.stringify(result2)}`);
+    
+    // 5. 在庫確認(570になっているはず)
+    const stockAfterOut = getCurrentStockByItemId('IT001');
+    Logger.log(`5. 出庫後在庫: ${stockAfterOut}個 (期待値: ${initialStock + 100 - 30})`);
+    
+    // 6. 訂正申請テスト
+    const result3 = requestCorrection({
+      元トランID: result1.トランID,
+      数量: -50,
+      理由: 'テスト用訂正(本来50個だった)',
+    });
+    Logger.log(`6. 訂正申請: ${JSON.stringify(result3)}`);
+    
+    // 7. 申請中レコードは在庫に反映されない
+    const stockBeforeApprove = getCurrentStockByItemId('IT001');
+    Logger.log(`7. 申請中の段階の在庫: ${stockBeforeApprove}個 (期待値: ${initialStock + 100 - 30}変わらず)`);
+    
+    // 8. 訂正承認
+    const result4 = approveCorrection(result3.トランID);
+    Logger.log(`8. 訂正承認: ${JSON.stringify(result4)}`);
+    
+    // 9. 承認後は在庫に反映
+    const stockAfterApprove = getCurrentStockByItemId('IT001');
+    Logger.log(`9. 承認後の在庫: ${stockAfterApprove}個 (期待値: ${initialStock + 100 - 30 - 50})`);
+    
+    // 10. 現在在庫一覧
+    const list = getCurrentStockList();
+    Logger.log(`10. 在庫一覧: ${list.length}件`);
+    list.forEach(s => {
+      Logger.log(`   - ${s['品名']}: ${s['現在在庫数']}${s['単位']} ${s['アラート']}`);
+    });
+    
+    // エラーケーステスト
+    Logger.log('--- エラーケース ---');
+    
+    // 11. 数量0の入庫(エラーになるはず)
+    try {
+      recordStockIn({ 品目ID: 'IT001', 数量: 0 });
+      Logger.log(`11. ❌ 数量0でエラーが出なかった`);
+    } catch (e) {
+      Logger.log(`11. ✅ 数量0で正常にエラー: ${e.message}`);
+    }
+    
+    // 12. 存在しない品目ID(エラーになるはず)
+    try {
+      recordStockIn({ 品目ID: 'IT999', 数量: 10 });
+      Logger.log(`12. ❌ 存在しない品目でエラーが出なかった`);
+    } catch (e) {
+      Logger.log(`12. ✅ 存在しない品目で正常にエラー: ${e.message}`);
+    }
+    
+    Logger.log('===== ✅ Phase 1-D テスト完了 =====');
+  } catch (e) {
+    Logger.log('===== ❌ エラー発生 =====');
+    Logger.log('エラー: ' + e.message);
+    Logger.log('スタック: ' + e.stack);
+  }
+}// ============================================================
+// Phase 1-D 改訂版: 入出庫API(取引後在庫+場所間移動+即時取消)
+// ============================================================
+
+const REVOCATION_LIMIT_MINUTES = 5;  // 即時取消の制限時間(分)
+
+/**
+ * 入出庫レコードを T_入出庫 に追記する内部関数
+ * 取引後在庫を計算して同時に記録
+ */
+function appendInventoryRecord(record, auth) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です。少し待ってから再試行してください。');
+  }
+  
+  try {
+    const sheet = getSheet(SHEETS.T_INVENTORY);
+    
+    const txnId = generateTransactionId();
+    const now = formatDateTime();
+    
+    // 取引後在庫を計算(承認済みレコードのみ対象 + 今回の数量)
+    let postBalance = '';
+    if (record.区分 !== '訂正' || record.ステータス === '承認済') {
+      // 訂正で「申請中」の場合は在庫に反映しないので空欄
+      const currentStock = getCurrentStockByItemId(record.品目ID);
+      postBalance = currentStock + Number(record.数量 || 0);
+    }
+    
+    // T_入出庫の列順:
+    // トランID/日時/区分/品目ID/ロットID/数量/取引後在庫/単価/場所ID/移動先場所ID/Gmail/備考/関連トランID/ステータス
+    const row = [
+      txnId,
+      now,
+      record.区分,
+      record.品目ID,
+      record.ロットID || '',
+      record.数量,
+      postBalance,
+      record.単価 || '',
+      record.場所ID || '',
+      record.移動先場所ID || '',
+      auth.email,
+      record.備考 || '',
+      record.関連トランID || '',
+      record.ステータス || '確定',
+    ];
+    
+    sheet.appendRow(row);
+    
+    return {
+      success: true,
+      トランID: txnId,
+      日時: now,
+      区分: record.区分,
+      品目ID: record.品目ID,
+      数量: record.数量,
+      取引後在庫: postBalance,
+      Gmail: auth.email,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 入庫記録
+ */
+function recordStockIn(input) {
+  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (!input.数量 || input.数量 <= 0) {
+    throw new Error('数量は正の数を指定してください(入庫)');
+  }
+
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  if (!item['有効']) throw new Error(`品目 ${item['品名']} は無効化されています`);
+
+  const unitPrice = input.単価 || item['標準単価'] || '';
+  const locationId = input.場所ID || item['主場所ID'] || '';
+
+  return appendInventoryRecord({
+    区分: '入庫',
+    品目ID: input.品目ID,
+    数量: input.数量,
+    単価: unitPrice,
+    場所ID: locationId,
+    備考: input.備考 || '',
+    ステータス: '確定',
+  }, auth);
+}
+
+/**
+ * 出庫(消費)記録
+ */
+function recordStockOut(input) {
+  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (!input.数量 || input.数量 <= 0) {
+    throw new Error('数量は正の数を指定してください(出庫数を入力)');
+  }
+
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  if (!item['有効']) throw new Error(`品目 ${item['品名']} は無効化されています`);
+
+  const currentStock = getCurrentStockByItemId(input.品目ID);
+  if (currentStock < input.数量) {
+    Logger.log(`⚠ 在庫不足: ${item['品名']} 現在${currentStock} → 出庫${input.数量}`);
+  }
+
+  const locationId = input.場所ID || item['主場所ID'] || '';
+
+  return appendInventoryRecord({
+    区分: '出庫消費',
+    品目ID: input.品目ID,
+    数量: -input.数量,
+    場所ID: locationId,
+    備考: input.備考 || '',
+    ステータス: '確定',
+  }, auth);
+}
+
+/**
+ * 場所間移動記録
+ * 1回の操作で「移動元から-N」「移動先に+N」を記録
+ * 関連トランIDで2レコードを紐付け
+ */
+function recordStockMove(input) {
+  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (!input.数量 || input.数量 <= 0) {
+    throw new Error('数量は正の数を指定してください');
+  }
+  if (!input.場所ID) throw new Error('移動元の場所IDを指定してください');
+  if (!input.移動先場所ID) throw new Error('移動先の場所IDを指定してください');
+  if (input.場所ID === input.移動先場所ID) {
+    throw new Error('移動元と移動先が同じです');
+  }
+  
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  
+  // 移動元から減算(数量はマイナスで記録、ただし合計在庫は変わらないので
+  // 取引後在庫は計算上同じ値になる)
+  // → 場所別在庫を将来追加した時のために、移動レコードは在庫合計に影響なし
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です');
+  }
+  
+  try {
+    const sheet = getSheet(SHEETS.T_INVENTORY);
+    const txnId1 = generateTransactionId();
+    const now = formatDateTime();
+    const currentStock = getCurrentStockByItemId(input.品目ID);
+    
+    // 移動は在庫総量を変えないので、取引後在庫は現在値のまま
+    const postBalance = currentStock;
+    
+    // 1レコード目: 移動元から出庫
+    sheet.appendRow([
+      txnId1, now, '移動', input.品目ID, '',
+      -input.数量, postBalance, '',
+      input.場所ID, input.移動先場所ID, auth.email,
+      input.備考 || `${input.場所ID}→${input.移動先場所ID} 移動`,
+      '', '確定',
+    ]);
+    
+    // 2レコード目を生成
+    Utilities.sleep(100);  // タイムスタンプを変えるため
+    const txnId2 = generateTransactionId();
+    
+    // 2レコード目: 移動先に入庫(関連トランIDで紐付け)
+    sheet.appendRow([
+      txnId2, formatDateTime(), '移動', input.品目ID, '',
+      input.数量, postBalance, '',
+      input.移動先場所ID, '', auth.email,
+      input.備考 || `${input.場所ID}→${input.移動先場所ID} 移動`,
+      txnId1, '確定',
+    ]);
+    
+    return {
+      success: true,
+      移動元トランID: txnId1,
+      移動先トランID: txnId2,
+      品目ID: input.品目ID,
+      数量: input.数量,
+      移動元: input.場所ID,
+      移動先: input.移動先場所ID,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 棚卸調整(管理者のみ)
+ */
+function recordStocktakeAdjustment(input) {
+  const auth = requireAdmin();
+  
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (input.数量 === undefined || input.数量 === null || input.数量 === 0) {
+    throw new Error('調整数量を指定してください(増加=正、減少=負)');
+  }
+  
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  
+  return appendInventoryRecord({
+    区分: '棚卸調整',
+    品目ID: input.品目ID,
+    数量: input.数量,
+    場所ID: input.場所ID || item['主場所ID'] || '',
+    備考: input.備考 || '棚卸差異の調整',
+    ステータス: '確定',
+  }, auth);
+}
+
+/**
+ * 即時取消(自分が5分以内に登録したものをキャンセル)
+ * 取消レコードを追加して在庫を元に戻す
+ */
+function revokeOwnRecord(トランID) {
+  const auth = requireAuth();
+  
+  const original = findInventoryById(トランID);
+  if (!original) throw new Error(`トランID ${トランID} が見つかりません`);
+  
+  // 自分のレコードか確認
+  if (original['Gmail'] !== auth.email) {
+    throw new Error('自分が記録したものしか取り消せません。訂正申請を使用してください。');
+  }
+  
+  // 5分以内か確認
+  const recordTime = new Date(original['日時']);
+  const elapsedMinutes = (Date.now() - recordTime.getTime()) / 60000;
+  if (elapsedMinutes > REVOCATION_LIMIT_MINUTES) {
+    throw new Error(
+      `${REVOCATION_LIMIT_MINUTES}分を超えたため即時取消できません。訂正申請を使用してください。`
+    );
+  }
+  
+  // 既に取消済み or 訂正済みでないか
+  if (original['区分'] === '取消') {
+    throw new Error('このレコードは既に取消です');
+  }
+  
+  // 取消レコード追加(逆符号)
+  return appendInventoryRecord({
+    区分: '取消',
+    品目ID: original['品目ID'],
+    数量: -Number(original['数量']),
+    場所ID: original['場所ID'],
+    備考: `即時取消(元: ${トランID})`,
+    関連トランID: トランID,
+    ステータス: '確定',
+  }, auth);
+}
+
+/**
+ * 訂正申請(現場が間違いを発見した時)
+ */
+function requestCorrection(input) {
+  const auth = requireAuth();
+  
+  if (!input.元トランID) throw new Error('元のトランIDを指定してください');
+  if (input.数量 === undefined || input.数量 === null || input.数量 === 0) {
+    throw new Error('訂正数量を指定してください');
+  }
+  if (!input.理由) throw new Error('訂正理由を必須入力してください');
+  
+  const original = findInventoryById(input.元トランID);
+  if (!original) throw new Error(`元のトランID ${input.元トランID} が見つかりません`);
+  
+  return appendInventoryRecord({
+    区分: '訂正',
+    品目ID: original['品目ID'],
+    数量: input.数量,
+    場所ID: original['場所ID'],
+    備考: `訂正理由: ${input.理由}`,
+    関連トランID: input.元トランID,
+    ステータス: '申請中',
+  }, auth);
+}
+
+/**
+ * 訂正承認(管理者のみ)
+ */
+function approveCorrection(訂正トランID) {
+  const auth = requireAdmin();
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です');
+  }
+  
+  try {
+    const sheet = getSheet(SHEETS.T_INVENTORY);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const txnIdCol = headers.indexOf('トランID');
+    const statusCol = headers.indexOf('ステータス');
+    const remarksCol = headers.indexOf('備考');
+    const itemIdCol = headers.indexOf('品目ID');
+    const qtyCol = headers.indexOf('数量');
+    const postBalCol = headers.indexOf('取引後在庫');
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][txnIdCol] === 訂正トランID) {
+        if (data[i][statusCol] !== '申請中') {
+          throw new Error(`このトランは既に処理済みです(現状: ${data[i][statusCol]})`);
+        }
+        // ステータスを承認済に
+        sheet.getRange(i + 1, statusCol + 1).setValue('承認済');
+        // 取引後在庫を計算して埋める
+        const itemId = data[i][itemIdCol];
+        const qty = Number(data[i][qtyCol]);
+        const currentStock = getCurrentStockByItemId(itemId);
+        sheet.getRange(i + 1, postBalCol + 1).setValue(currentStock);
+        // 備考に承認情報を追記
+        const oldRemarks = data[i][remarksCol] || '';
+        const newRemarks = `${oldRemarks} [承認: ${auth.name} ${formatDateTime()}]`;
+        sheet.getRange(i + 1, remarksCol + 1).setValue(newRemarks);
+        
+        return { success: true, トランID: 訂正トランID, ステータス: '承認済' };
+      }
+    }
+    throw new Error(`トランID ${訂正トランID} が見つかりません`);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 訂正却下
+ */
+function rejectCorrection(訂正トランID, 却下理由) {
+  const auth = requireAdmin();
+  if (!却下理由) throw new Error('却下理由を入力してください');
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です');
+  }
+  
+  try {
+    const sheet = getSheet(SHEETS.T_INVENTORY);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const txnIdCol = headers.indexOf('トランID');
+    const statusCol = headers.indexOf('ステータス');
+    const remarksCol = headers.indexOf('備考');
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][txnIdCol] === 訂正トランID) {
+        if (data[i][statusCol] !== '申請中') {
+          throw new Error(`このトランは既に処理済みです(現状: ${data[i][statusCol]})`);
+        }
+        sheet.getRange(i + 1, statusCol + 1).setValue('却下');
+        const oldRemarks = data[i][remarksCol] || '';
+        const newRemarks = `${oldRemarks} [却下: ${auth.name} ${formatDateTime()} 理由: ${却下理由}]`;
+        sheet.getRange(i + 1, remarksCol + 1).setValue(newRemarks);
+        
+        return { success: true, トランID: 訂正トランID, ステータス: '却下' };
+      }
+    }
+    throw new Error(`トランID ${訂正トランID} が見つかりません`);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * トランIDで検索
+ */
+function findInventoryById(トランID) {
+  const data = getSheetData(SHEETS.T_INVENTORY);
+  return data.find(row => row['トランID'] === トランID) || null;
+}
+
+/**
+ * 品目IDの現在在庫を計算
+ * 計算対象: ステータス確定 or 承認済 (申請中・却下・取消は除外)
+ * 移動レコードは合計に影響しない(在庫総量は変わらないため)
+ */
+function getCurrentStockByItemId(品目ID) {
+  const data = getSheetData(SHEETS.T_INVENTORY);
+  return data
+    .filter(row => row['品目ID'] === 品目ID)
+    .filter(row => row['ステータス'] === '確定' || row['ステータス'] === '承認済')
+    .filter(row => row['区分'] !== '移動')  // 移動は総量に影響しない
+    .reduce((sum, row) => sum + (Number(row['数量']) || 0), 0);
+}
+
+/**
+ * 全品目の現在在庫一覧
+ */
+function getCurrentStockList() {
+  // requireAuth(); // Phase 3a: PWA/PC管理画面からの呼び出し対応
+  
+  const items = getItems();
+  return items.map(item => {
+    const stock = getCurrentStockByItemId(item['品目ID']);
+    const threshold = Number(item['閾値']) || 0;
+    return {
+      品目ID: item['品目ID'],
+      品名: item['品名'],
+      大カテゴリ: item['大カテゴリ'],
+      単位: item['単位'],
+      現在在庫数: stock,
+      閾値: threshold,
+      アラート: threshold > 0 && stock < threshold ? '⚠ 閾値割れ' : '',
+    };
+  });
+}
+
+/**
+ * 既存レコードの取引後在庫を後付けで埋めるバッチ
+ * 過去のレコードに「取引後在庫」が空欄の場合、その時点の累計を計算して埋める
+ * 1回だけ実行する保守用関数
+ */
+function backfillPostBalance() {
+  const auth = requireAdmin();
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw new Error('他の処理が実行中です');
+  }
+  
+  try {
+    const sheet = getSheet(SHEETS.T_INVENTORY);
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const txnIdCol = headers.indexOf('トランID');
+    const itemIdCol = headers.indexOf('品目ID');
+    const qtyCol = headers.indexOf('数量');
+    const postBalCol = headers.indexOf('取引後在庫');
+    const statusCol = headers.indexOf('ステータス');
+    const kindCol = headers.indexOf('区分');
+    const dateCol = headers.indexOf('日時');
+    
+    // 日時順にソートするためのインデックス配列
+    const indexedRows = [];
+    for (let i = 1; i < data.length; i++) {
+      if (!data[i][txnIdCol]) continue;  // 空行スキップ
+      indexedRows.push({
+        rowNum: i + 1,
+        date: data[i][dateCol],
+        itemId: data[i][itemIdCol],
+        qty: Number(data[i][qtyCol]) || 0,
+        status: data[i][statusCol],
+        kind: data[i][kindCol],
+        postBal: data[i][postBalCol],
+      });
+    }
+    
+    // 日時順にソート
+    indexedRows.sort((a, b) => {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return 0;
+    });
+    
+    // 品目別に累計を計算
+    const stockByItem = {};
+    let updatedCount = 0;
+    
+    indexedRows.forEach(row => {
+      // 在庫に反映するレコードか
+      const affects = (row.status === '確定' || row.status === '承認済') 
+                     && row.kind !== '移動';
+      
+      if (affects) {
+        if (!stockByItem[row.itemId]) stockByItem[row.itemId] = 0;
+        stockByItem[row.itemId] += row.qty;
+      }
+      
+      // 取引後在庫が空欄なら埋める
+      if ((row.postBal === '' || row.postBal === null || row.postBal === undefined) && affects) {
+        sheet.getRange(row.rowNum, postBalCol + 1).setValue(stockByItem[row.itemId] || 0);
+        updatedCount++;
+      }
+    });
+    
+    return {
+      success: true,
+      updatedCount: updatedCount,
+      message: `${updatedCount}件の取引後在庫を更新しました`,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ===== Phase 1-D 改訂版 テスト =====
+
+function testPhase1D_v2() {
+  Logger.log('===== Phase 1-D 改訂版 動作確認開始 =====');
+  
+  try {
+    // 0. 既存テストデータの取引後在庫を埋める(初回のみ)
+    Logger.log('--- 既存データの取引後在庫を埋める ---');
+    const backfill = backfillPostBalance();
+    Logger.log(`取引後在庫バックフィル: ${backfill.message}`);
+    
+    // 1. 現在在庫
+    const stock0 = getCurrentStockByItemId('IT001');
+    Logger.log(`1. IT001 現在在庫: ${stock0}個`);
+    
+    // 2. 入庫
+    const r1 = recordStockIn({
+      品目ID: 'IT001',
+      数量: 50,
+      備考: '改訂版テスト入庫',
+    });
+    Logger.log(`2. 入庫: ${JSON.stringify(r1)}`);
+    Logger.log(`   取引後在庫が記録されているか: ${r1.取引後在庫}個`);
+    
+    // 3. 出庫
+    const r2 = recordStockOut({
+      品目ID: 'IT001',
+      数量: 20,
+      備考: '改訂版テスト出庫',
+    });
+    Logger.log(`3. 出庫: 取引後在庫=${r2.取引後在庫}個`);
+    
+    // 4. 即時取消(自分の出庫を取り消し)
+    Utilities.sleep(1000);  // 少し待つ
+    const r3 = revokeOwnRecord(r2.トランID);
+    Logger.log(`4. 即時取消: ${JSON.stringify(r3)}`);
+    
+    // 5. 取消後の在庫(出庫が無効化されたので入庫直後と同じ)
+    const stock5 = getCurrentStockByItemId('IT001');
+    Logger.log(`5. 取消後の在庫: ${stock5}個 (期待値: ${stock0 + 50})`);
+    
+    // 6. 場所間移動(LC001 → LC001:同じ場所はエラー)
+    try {
+      recordStockMove({
+        品目ID: 'IT001',
+        数量: 10,
+        場所ID: 'LC001',
+        移動先場所ID: 'LC001',
+      });
+      Logger.log(`6. ❌ 同一場所移動でエラー出ず`);
+    } catch (e) {
+      Logger.log(`6. ✅ 同一場所移動エラー: ${e.message}`);
+    }
+    
+    // 7. エラーケース: 5分超のレコードを取消しようとする
+    try {
+      revokeOwnRecord('TR001');  // 既存の古いレコード
+      Logger.log(`7. ❌ 古いレコード取消でエラー出ず`);
+    } catch (e) {
+      Logger.log(`7. ✅ 5分超エラー: ${e.message}`);
+    }
+    
+    // 8. 在庫一覧
+    const list = getCurrentStockList();
+    Logger.log(`8. 在庫一覧:`);
+    list.forEach(s => {
+      Logger.log(`   - ${s['品名']}: ${s['現在在庫数']}${s['単位']} ${s['アラート']}`);
+    });
+    
+    Logger.log('===== ✅ Phase 1-D 改訂版 テスト完了 =====');
+  } catch (e) {
+    Logger.log('===== ❌ エラー =====');
+    Logger.log(e.message);
+    Logger.log(e.stack);
+  }
+}// ============================================================
+// Phase 1-F: ロット管理API
+// ============================================================
+
+const EXPIRY_ALERT_DAYS = [30, 7, 0];  // 期限警告日数
+
+/**
+ * ロットIDを採番
+ * 例: LOT001
+ */
+function generateLotId() {
+  const sheet = getSheet(SHEETS.T_LOT || 'T_ロット');
+  const data = sheet.getDataRange().getValues();
+  
+  let maxNum = 0;
+  for (let i = 1; i < data.length; i++) {
+    const id = String(data[i][0] || '');
+    const match = id.match(/^LOT(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  
+  return `LOT${String(maxNum + 1).padStart(3, '0')}`;
+}
+
+/**
+ * ロット新規登録(仕入時)
+ * @param {Object} input { 品目ID, ロット番号?, 仕入日, 賞味期限, 入庫数量, 備考? }
+ */
+function registerLot(input) {
+  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+
+  // バリデーション
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (!input.賞味期限) throw new Error('賞味期限を指定してください');
+  if (!input.入庫数量 || input.入庫数量 <= 0) {
+    throw new Error('入庫数量は正の数を指定してください');
+  }
+  
+  // 品目存在確認
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  if (!item['ロット管理']) {
+    throw new Error(`品目「${item['品名']}」はロット管理が無効です。M_品目で「ロット管理」をTRUEにしてください。`);
+  }
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です');
+  }
+  
+  try {
+    const sheet = getSheet('T_ロット');
+    const lotId = generateLotId();
+    const lotNumber = input.ロット番号 || lotId;  // 未指定なら自動採番をそのまま使う
+    const purchaseDate = input.仕入日 || formatDate();
+    
+    // T_ロット の列順:
+    // ロットID/品目ID/ロット番号/仕入日/賞味期限/入庫数量/残数量/ステータス/備考
+    sheet.appendRow([
+      lotId,
+      input.品目ID,
+      lotNumber,
+      purchaseDate,
+      input.賞味期限,
+      input.入庫数量,
+      input.入庫数量,  // 初期残数量 = 入庫数量
+      '有効',
+      input.備考 || `${auth.name} 登録`,
+    ]);
+    
+    // T_入出庫にも入庫レコードを連動追加
+    appendInventoryRecord({
+      区分: '入庫',
+      品目ID: input.品目ID,
+      ロットID: lotId,
+      数量: input.入庫数量,
+      単価: item['標準単価'] || '',
+      場所ID: item['主場所ID'] || '',
+      備考: `ロット入庫 ${lotNumber} 賞味期限:${input.賞味期限}`,
+      ステータス: '確定',
+    }, auth);
+    
+    return {
+      success: true,
+      ロットID: lotId,
+      品目ID: input.品目ID,
+      ロット番号: lotNumber,
+      賞味期限: input.賞味期限,
+      入庫数量: input.入庫数量,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 品目別の有効ロット一覧を取得(賞味期限の近い順)
+ * @param {string} 品目ID 
+ * @returns {Array<Object>}
+ */
+function getActiveLots(品目ID) {
+  // requireAuth(); // Phase 3a: PWAからの呼び出し対応
+
+  const lots = getSheetData('T_ロット')
+    .filter(lot => lot['品目ID'] === 品目ID)
+    .filter(lot => lot['ステータス'] === '有効')
+    .filter(lot => Number(lot['残数量']) > 0);
+  
+  // 賞味期限の近い順にソート(FIFO)
+  lots.sort((a, b) => {
+    const dateA = new Date(a['賞味期限']);
+    const dateB = new Date(b['賞味期限']);
+    return dateA - dateB;
+  });
+  
+  return lots;
+}
+
+/**
+ * ロットの残数量を品目別に合計
+ */
+function getLotTotalByItemId(品目ID) {
+  return getActiveLots(品目ID)
+    .reduce((sum, lot) => sum + Number(lot['残数量']), 0);
+}
+
+/**
+ * FIFO引き当て(賞味期限の近い順から自動消費)
+ * 出庫数量を、賞味期限の近いロットから順に引いていく
+ * @param {string} 品目ID 
+ * @param {number} 必要数量 
+ * @returns {Array<{ロットID, 引当数量, 残数量}>}
+ */
+function allocateLotsByFIFO(品目ID, 必要数量) {
+  if (必要数量 <= 0) return [];
+  
+  const lots = getActiveLots(品目ID);
+  const total = lots.reduce((sum, lot) => sum + Number(lot['残数量']), 0);
+  
+  if (total < 必要数量) {
+    throw new Error(`ロット在庫不足: 必要${必要数量}、有効ロット合計${total}`);
+  }
+  
+  const allocations = [];
+  let remaining = 必要数量;
+  
+  for (const lot of lots) {
+    if (remaining <= 0) break;
+    
+    const lotStock = Number(lot['残数量']);
+    const allocate = Math.min(lotStock, remaining);
+    
+    allocations.push({
+      ロットID: lot['ロットID'],
+      ロット番号: lot['ロット番号'],
+      賞味期限: lot['賞味期限'],
+      引当数量: allocate,
+      引当後残数量: lotStock - allocate,
+    });
+    
+    remaining -= allocate;
+  }
+  
+  return allocations;
+}
+
+/**
+ * ロット管理品の出庫(FIFO自動引き当て + 残数量更新)
+ * @param {Object} input { 品目ID, 数量, 場所ID?, 備考? }
+ */
+function recordStockOutWithLot(input) {
+  const auth = input.gmail ? requireGmailAuth(input.gmail) : requireAuth();
+
+  if (!input.品目ID) throw new Error('品目IDが指定されていません');
+  if (!input.数量 || input.数量 <= 0) {
+    throw new Error('出庫数量は正の数を指定してください');
+  }
+  
+  const item = getItemById(input.品目ID);
+  if (!item) throw new Error(`品目ID ${input.品目ID} が見つかりません`);
+  
+  // ロット管理品か確認
+  if (!item['ロット管理']) {
+    // ロット管理品でなければ通常の出庫処理
+    return recordStockOut(input);
+  }
+  
+  // FIFO引き当て
+  const allocations = allocateLotsByFIFO(input.品目ID, input.数量);
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) {
+    throw new Error('他の処理が実行中です');
+  }
+  
+  try {
+    const lotSheet = getSheet('T_ロット');
+    const lotData = lotSheet.getDataRange().getValues();
+    const lotHeaders = lotData[0];
+    const lotIdCol = lotHeaders.indexOf('ロットID');
+    const remainCol = lotHeaders.indexOf('残数量');
+    const statusCol = lotHeaders.indexOf('ステータス');
+    
+    const results = [];
+    
+    // ロットごとに出庫処理
+    for (const alloc of allocations) {
+      // T_入出庫に出庫レコード追加
+      const result = appendInventoryRecord({
+        区分: '出庫消費',
+        品目ID: input.品目ID,
+        ロットID: alloc.ロットID,
+        数量: -alloc.引当数量,
+        場所ID: input.場所ID || item['主場所ID'] || '',
+        備考: `${input.備考 || ''} ロット:${alloc.ロット番号} 期限:${alloc.賞味期限}`.trim(),
+        ステータス: '確定',
+      }, auth);
+      
+      // T_ロットの残数量を更新
+      for (let i = 1; i < lotData.length; i++) {
+        if (lotData[i][lotIdCol] === alloc.ロットID) {
+          lotSheet.getRange(i + 1, remainCol + 1).setValue(alloc.引当後残数量);
+          // 残0になったらステータスは「有効」のまま(履歴として残す)
+          // 期限切れ判定は別タイミング
+          break;
+        }
+      }
+      
+      results.push(result);
+    }
+    
+    return {
+      success: true,
+      品目ID: input.品目ID,
+      出庫数量合計: input.数量,
+      引当ロット数: allocations.length,
+      引当詳細: allocations,
+      records: results,
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 期限切れアラート対象のロット一覧
+ * 30日前 / 7日前 / 期限当日 の3段階で警告レベルを返す
+ */
+function getExpiringLots() {
+  requireAuth();
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const lots = getSheetData('T_ロット')
+    .filter(lot => lot['ステータス'] === '有効')
+    .filter(lot => Number(lot['残数量']) > 0);
+  
+  const alerts = [];
+  
+  lots.forEach(lot => {
+    const expiry = new Date(lot['賞味期限']);
+    expiry.setHours(0, 0, 0, 0);
+    
+    const daysLeft = Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
+    
+    let level = null;
+    if (daysLeft < 0) {
+      level = '🔴 期限切れ';
+    } else if (daysLeft === 0) {
+      level = '🔴 本日期限';
+    } else if (daysLeft <= 7) {
+      level = '🟡 7日以内';
+    } else if (daysLeft <= 30) {
+      level = '🟢 30日以内';
+    }
+    
+    if (level) {
+      const item = getItemById(lot['品目ID']);
+      alerts.push({
+        ロットID: lot['ロットID'],
+        品目ID: lot['品目ID'],
+        品名: item ? item['品名'] : '不明',
+        ロット番号: lot['ロット番号'],
+        賞味期限: lot['賞味期限'],
+        残数量: Number(lot['残数量']),
+        残日数: daysLeft,
+        警告レベル: level,
+      });
+    }
+  });
+  
+  // 期限の近い順にソート
+  alerts.sort((a, b) => a.残日数 - b.残日数);
+  
+  return alerts;
+}
+
+/**
+ * 期限切れロットを一括「期限切れ」ステータスに更新(管理者のみ)
+ * 1日1回バッチで実行する想定
+ */
+function markExpiredLots() {
+  const auth = requireAdmin();
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です');
+  }
+  
+  try {
+    const sheet = getSheet('T_ロット');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const expiryCol = headers.indexOf('賞味期限');
+    const statusCol = headers.indexOf('ステータス');
+    const remainCol = headers.indexOf('残数量');
+    
+    let count = 0;
+    for (let i = 1; i < data.length; i++) {
+      const status = data[i][statusCol];
+      const expiry = data[i][expiryCol];
+      const remain = Number(data[i][remainCol]) || 0;
+      
+      if (status === '有効' && expiry && remain > 0) {
+        const expiryDate = new Date(expiry);
+        expiryDate.setHours(0, 0, 0, 0);
+        if (expiryDate < today) {
+          sheet.getRange(i + 1, statusCol + 1).setValue('期限切れ');
+          count++;
+        }
+      }
+    }
+    
+    return {
+      success: true,
+      期限切れ更新数: count,
+      実行日: formatDate(),
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 期限切れロットを廃棄処理
+ * @param {string} ロットID 
+ * @param {string} 廃棄理由 
+ */
+function discardLot(ロットID, 廃棄理由, gmail) {
+  const auth = gmail ? requireGmailAuth(gmail) : requireAdmin();
+
+  if (!ロットID) throw new Error('ロットIDを指定してください');
+  if (!廃棄理由) throw new Error('廃棄理由を入力してください');
+  
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) {
+    throw new Error('他の処理が実行中です');
+  }
+  
+  try {
+    const sheet = getSheet('T_ロット');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const lotIdCol = headers.indexOf('ロットID');
+    const itemIdCol = headers.indexOf('品目ID');
+    const remainCol = headers.indexOf('残数量');
+    const statusCol = headers.indexOf('ステータス');
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][lotIdCol] === ロットID) {
+        const remainQty = Number(data[i][remainCol]) || 0;
+        const itemId = data[i][itemIdCol];
+        
+        if (remainQty <= 0) {
+          throw new Error('このロットは既に残数量0です');
+        }
+        
+        // T_入出庫に「廃棄」レコード追加
+        appendInventoryRecord({
+          区分: '廃棄',
+          品目ID: itemId,
+          ロットID: ロットID,
+          数量: -remainQty,
+          備考: `廃棄理由: ${廃棄理由}`,
+          ステータス: '確定',
+        }, auth);
+        
+        // T_ロット を更新(残数量0、ステータス廃棄済)
+        sheet.getRange(i + 1, remainCol + 1).setValue(0);
+        sheet.getRange(i + 1, statusCol + 1).setValue('廃棄済');
+        
+        return {
+          success: true,
+          ロットID: ロットID,
+          廃棄数量: remainQty,
+          廃棄理由: 廃棄理由,
+        };
+      }
+    }
+    throw new Error(`ロットID ${ロットID} が見つかりません`);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ===== Phase 1-F テスト =====
+
+function testPhase1F() {
+  Logger.log('===== Phase 1-F ロット管理 動作確認開始 =====');
+  
+  try {
+    // === 準備: テスト用品目を作成 ===
+    Logger.log('--- 準備: テスト用ロット管理品目を作成 ---');
+    
+    // M_品目に「IT002 テスト原料(ロット管理ON)」を追加
+    const itemSheet = getSheet(SHEETS.M_ITEM);
+    const itemData = getSheetData(SHEETS.M_ITEM);
+    let testItemExists = itemData.some(i => i['品目ID'] === 'IT002');
+    
+    if (!testItemExists) {
+      // M_品目に追加
+      // 列順: 品目ID/バーコード/品名/大カテゴリ/中カテゴリ/単位/標準単価/販売単価/ロット管理/賞味期限管理/税率/閾値/主場所ID/有効
+      itemSheet.appendRow([
+        'IT002', '', 'テスト原料A', '原料', '果汁', 'kg', 100, 0,
+        true, true, '8%', 50, 'LC001', true,
+      ]);
+      Logger.log('IT002 (テスト原料A) を作成しました');
+    } else {
+      Logger.log('IT002 は既に存在します');
+    }
+    
+    // === ロット登録テスト ===
+    Logger.log('--- ロット登録テスト ---');
+    
+    // 1. ロット1: 賞味期限が遠い
+    const lot1 = registerLot({
+      品目ID: 'IT002',
+      ロット番号: 'L20260601-A',
+      仕入日: '2026-06-01',
+      賞味期限: '2027-06-01',
+      入庫数量: 100,
+      備考: 'テストロット1',
+    });
+    Logger.log(`1. ロット1登録: ${JSON.stringify(lot1)}`);
+    
+    // 2. ロット2: 賞味期限が近い
+    const lot2 = registerLot({
+      品目ID: 'IT002',
+      ロット番号: 'L20260515-B',
+      仕入日: '2026-05-15',
+      賞味期限: '2026-08-01',  // こちらが近い
+      入庫数量: 50,
+      備考: 'テストロット2',
+    });
+    Logger.log(`2. ロット2登録: ${JSON.stringify(lot2)}`);
+    
+    // 3. ロット3: 期限切れ間近
+    const lot3 = registerLot({
+      品目ID: 'IT002',
+      ロット番号: 'L20260510-C',
+      仕入日: '2026-05-10',
+      賞味期限: '2026-05-20',  // 1週間以内
+      入庫数量: 30,
+      備考: 'テストロット3 (期限間近)',
+    });
+    Logger.log(`3. ロット3登録: ${JSON.stringify(lot3)}`);
+    
+    // 4. 有効ロット一覧(賞味期限順)
+    const activeLots = getActiveLots('IT002');
+    Logger.log(`4. 有効ロット一覧 (${activeLots.length}件):`);
+    activeLots.forEach(lot => {
+      Logger.log(`   - ${lot['ロット番号']} 期限:${lot['賞味期限']} 残:${lot['残数量']}`);
+    });
+    
+    // 5. ロット合計
+    const totalLot = getLotTotalByItemId('IT002');
+    Logger.log(`5. IT002 ロット合計残数量: ${totalLot} (期待値: 180)`);
+    
+    // 6. FIFO引き当てシミュレーション
+    const sim = allocateLotsByFIFO('IT002', 60);
+    Logger.log(`6. FIFO引き当て(60kg): ${JSON.stringify(sim)}`);
+    
+    // 7. ロット出庫(40kg)→ 期限の近いロット3(30kg)から先に消費
+    const out1 = recordStockOutWithLot({
+      品目ID: 'IT002',
+      数量: 40,
+      備考: 'テスト出庫',
+    });
+    Logger.log(`7. ロット出庫: 引当${out1.引当ロット数}件`);
+    out1.引当詳細.forEach(d => {
+      Logger.log(`   - ${d['ロット番号']} ${d['引当数量']}kg → 残${d['引当後残数量']}`);
+    });
+    
+    // 8. 出庫後の有効ロット
+    const after = getActiveLots('IT002');
+    Logger.log(`8. 出庫後ロット (${after.length}件):`);
+    after.forEach(lot => {
+      Logger.log(`   - ${lot['ロット番号']} 残:${lot['残数量']}`);
+    });
+    
+    // 9. 期限切れアラート
+    const alerts = getExpiringLots();
+    Logger.log(`9. 期限切れアラート (${alerts.length}件):`);
+    alerts.forEach(a => {
+      Logger.log(`   ${a.警告レベル} ${a['品名']} ${a['ロット番号']} 残${a.残日数}日`);
+    });
+    
+    // 10. ロット未管理品の出庫(IT001 = ロット管理OFF)
+    const out2 = recordStockOutWithLot({
+      品目ID: 'IT001',
+      数量: 5,
+      備考: 'ロット管理OFF品の出庫',
+    });
+    Logger.log(`10. ロット管理OFF品の出庫: ${JSON.stringify({success: out2.success, トランID: out2.トランID})}`);
+    
+    Logger.log('===== ✅ Phase 1-F テスト完了 =====');
+  } catch (e) {
+    Logger.log('===== ❌ エラー =====');
+    Logger.log(e.message);
+    Logger.log(e.stack);
+  }
+}// ============================================================
+// Phase 1-F 修正: 期限切れアラートのタイムゾーン対応
+// ============================================================
+
+/**
+ * 日付セルから日本時間の Date オブジェクトを取得
+ * スプシの日付セルは UTC で保存されることがあるため統一
+ */
+function parseSheetDate(value) {
+  if (!value) return null;
+  
+  // すでに Date オブジェクトの場合
+  if (value instanceof Date) {
+    // タイムゾーン補正:日本時間として再構築
+    const year = value.getFullYear();
+    const month = value.getMonth();
+    const date = value.getDate();
+    return new Date(year, month, date, 0, 0, 0);
+  }
+  
+  // 文字列の場合(yyyy-mm-dd 形式想定)
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (match) {
+      return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), 0, 0, 0);
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * 期限切れアラート(タイムゾーン修正版)
+ */
+function getExpiringLots() {
+  requireAuth();
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const lots = getSheetData('T_ロット')
+    .filter(lot => lot['ステータス'] === '有効')
+    .filter(lot => Number(lot['残数量']) > 0);
+  
+  const alerts = [];
+  
+  lots.forEach(lot => {
+    const expiry = parseSheetDate(lot['賞味期限']);
+    if (!expiry) return;
+    
+    const daysLeft = Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
+    
+    let level = null;
+    if (daysLeft < 0) {
+      level = '🔴 期限切れ';
+    } else if (daysLeft === 0) {
+      level = '🔴 本日期限';
+    } else if (daysLeft <= 7) {
+      level = '🟡 7日以内';
+    } else if (daysLeft <= 30) {
+      level = '🟢 30日以内';
+    }
+    
+    if (level) {
+      const item = getItemById(lot['品目ID']);
+      alerts.push({
+        ロットID: lot['ロットID'],
+        品目ID: lot['品目ID'],
+        品名: item ? item['品名'] : '不明',
+        ロット番号: lot['ロット番号'],
+        賞味期限: Utilities.formatDate(expiry, 'Asia/Tokyo', 'yyyy-MM-dd'),
+        残数量: Number(lot['残数量']),
+        残日数: daysLeft,
+        警告レベル: level,
+      });
+    }
+  });
+  
+  alerts.sort((a, b) => a.残日数 - b.残日数);
+  return alerts;
+}
+
+// ===== 単独テスト =====
+
+function testExpiryAlert() {
+  Logger.log('===== 期限切れアラート再テスト =====');
+  
+  try {
+    Logger.log(`今日の日付: ${formatDate()}`);
+    
+    const alerts = getExpiringLots();
+    Logger.log(`\nアラート対象: ${alerts.length}件`);
+    
+    alerts.forEach(a => {
+      Logger.log(`${a.警告レベル} ${a['品名']} ${a['ロット番号']}`);
+      Logger.log(`   賞味期限: ${a['賞味期限']} 残日数: ${a.残日数}日 残数量: ${a.残数量}`);
+    });
+    
+    if (alerts.length === 0) {
+      Logger.log('⚠ アラートが0件。データを確認します:');
+      const lots = getSheetData('T_ロット').filter(l => l['ステータス'] === '有効');
+      lots.forEach(lot => {
+        Logger.log(`   ${lot['ロット番号']} 期限:${lot['賞味期限']} (型:${typeof lot['賞味期限']}) 残:${lot['残数量']}`);
+      });
+    }
+    
+    Logger.log('===== ✅ テスト完了 =====');
+  } catch (e) {
+    Logger.log('❌ ' + e.message);
+  }
+}// ============================================================
+// Phase 1-F 修正: 期限切れアラートのタイムゾーン対応
+// ============================================================
+
+/**
+ * 日付セルから日本時間の Date オブジェクトを取得
+ * スプシの日付セルは UTC で保存されることがあるため統一
+ */
+function parseSheetDate(value) {
+  if (!value) return null;
+  
+  // すでに Date オブジェクトの場合
+  if (value instanceof Date) {
+    // タイムゾーン補正:日本時間として再構築
+    const year = value.getFullYear();
+    const month = value.getMonth();
+    const date = value.getDate();
+    return new Date(year, month, date, 0, 0, 0);
+  }
+  
+  // 文字列の場合(yyyy-mm-dd 形式想定)
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (match) {
+      return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), 0, 0, 0);
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * 期限切れアラート(タイムゾーン修正版)
+ */
+function getExpiringLots() {
+  requireAuth();
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const lots = getSheetData('T_ロット')
+    .filter(lot => lot['ステータス'] === '有効')
+    .filter(lot => Number(lot['残数量']) > 0);
+  
+  const alerts = [];
+  
+  lots.forEach(lot => {
+    const expiry = parseSheetDate(lot['賞味期限']);
+    if (!expiry) return;
+    
+    const daysLeft = Math.floor((expiry - today) / (1000 * 60 * 60 * 24));
+    
+    let level = null;
+    if (daysLeft < 0) {
+      level = '🔴 期限切れ';
+    } else if (daysLeft === 0) {
+      level = '🔴 本日期限';
+    } else if (daysLeft <= 7) {
+      level = '🟡 7日以内';
+    } else if (daysLeft <= 30) {
+      level = '🟢 30日以内';
+    }
+    
+    if (level) {
+      const item = getItemById(lot['品目ID']);
+      alerts.push({
+        ロットID: lot['ロットID'],
+        品目ID: lot['品目ID'],
+        品名: item ? item['品名'] : '不明',
+        ロット番号: lot['ロット番号'],
+        賞味期限: Utilities.formatDate(expiry, 'Asia/Tokyo', 'yyyy-MM-dd'),
+        残数量: Number(lot['残数量']),
+        残日数: daysLeft,
+        警告レベル: level,
+      });
+    }
+  });
+  
+  alerts.sort((a, b) => a.残日数 - b.残日数);
+  return alerts;
+}
+
+// ===== 単独テスト =====
+
+function testExpiryAlert() {
+  Logger.log('===== 期限切れアラート再テスト =====');
+  
+  try {
+    Logger.log(`今日の日付: ${formatDate()}`);
+    
+    const alerts = getExpiringLots();
+    Logger.log(`\nアラート対象: ${alerts.length}件`);
+    
+    alerts.forEach(a => {
+      Logger.log(`${a.警告レベル} ${a['品名']} ${a['ロット番号']}`);
+      Logger.log(`   賞味期限: ${a['賞味期限']} 残日数: ${a.残日数}日 残数量: ${a.残数量}`);
+    });
+    
+    if (alerts.length === 0) {
+      Logger.log('⚠ アラートが0件。データを確認します:');
+      const lots = getSheetData('T_ロット').filter(l => l['ステータス'] === '有効');
+      lots.forEach(lot => {
+        Logger.log(`   ${lot['ロット番号']} 期限:${lot['賞味期限']} (型:${typeof lot['賞味期限']}) 残:${lot['残数量']}`);
+      });
+    }
+    
+    Logger.log('===== ✅ テスト完了 =====');
+  } catch (e) {
+    Logger.log('❌ ' + e.message);
+  }
+}/**
+ * 期限切れアラートテスト用のロットを追加
+ */
+function addExpiringLotForTest() {
+  const r = registerLot({
+    品目ID: 'IT002',
+    ロット番号: 'L_TEST_3DAYS',
+    仕入日: '2026-05-15',
+    賞味期限: '2026-05-18',  // 今日から3日後
+    入庫数量: 10,
+    備考: 'アラートテスト用(3日後期限)',
+  });
+  Logger.log('追加: ' + JSON.stringify(r));
+}
+// ============================================================
+// Phase 1-E: Web App ルーティング + デプロイ
+// ============================================================
+
+/**
+ * GETリクエストのハンドラ(データ取得用)
+ * URLの末尾に ?action=getItems のような形でパラメータを渡す
+ * 
+ * 例:
+ * https://script.google.com/.../exec?action=getCurrentStockList
+ * https://script.google.com/.../exec?action=getItemById&品目ID=IT001
+ */
+function doGet(e) {
+  return handleRequest(e);
+}
+
+/**
+ * POSTリクエストのハンドラ(データ書き込み用)
+ * リクエストボディに JSON を渡す
+ * 
+ * 例:
+ * POST /.../exec
+ * Body: {"action":"recordStockIn","品目ID":"IT001","数量":10}
+ */
+function doPost(e) {
+  return handleRequest(e);
+}
+
+/**
+ * GET/POST 共通ハンドラ
+ */
+function handleRequest(e) {
+  try {
+    // パラメータ取得
+    let params = {};
+    
+    // URLクエリパラメータ
+    if (e && e.parameter) {
+      params = Object.assign(params, e.parameter);
+    }
+    
+    // POSTボディ(JSON)
+    if (e && e.postData && e.postData.contents) {
+      try {
+        const body = JSON.parse(e.postData.contents);
+        params = Object.assign(params, body);
+      } catch (err) {
+        // JSONでない場合は無視
+      }
+    }
+    
+    const action = params.action;
+    if (!action) {
+      return jsonResponse({
+        success: false,
+        error: 'actionパラメータが必要です',
+      });
+    }
+    
+    // ホワイトリスト方式: 呼び出し可能な関数を明示
+    const result = dispatchAction(action, params);
+    
+    return jsonResponse({
+      success: true,
+      action: action,
+      data: result,
+    });
+  } catch (err) {
+    return jsonResponse({
+      success: false,
+      error: err.message || String(err),
+      stack: err.stack || null,
+    });
+  }
+}
+
+/**
+ * actionに応じて該当関数を呼び出す
+ * セキュリティ: ホワイトリスト方式(任意の関数を呼べないようにする)
+ */
+function dispatchAction(action, params) {
+  switch (action) {
+    // === 認証 ===
+    case 'authenticate':
+      return authenticate();
+    
+    // === マスター取得 ===
+    case 'getItems':
+      return getItems({ category: params.category });
+    case 'getItemById':
+      return getItemById(params.品目ID);
+    case 'findItemByBarcode':
+      return findItemByBarcode(params.barcode);
+    case 'searchItemsByName':
+      return searchItemsByName(params.keyword, {
+        category: params.category,
+        limit: params.limit ? Number(params.limit) : undefined,
+      });
+    case 'getCategories':
+      return getCategories();
+    case 'getUsers':
+      return getUsers();
+    case 'getLocations':
+      return getLocations();
+    case 'getDiscounts':
+      return getDiscounts();
+    case 'getCurrentFiscalYear':
+      return getCurrentFiscalYear();
+    
+    // === 在庫情報取得 ===
+    case 'getCurrentStockByItemId':
+      return getCurrentStockByItemId(params.品目ID);
+    case 'getCurrentStockList':
+      return getCurrentStockList();
+    
+    // === 入出庫(基本) ===
+    case 'recordStockIn':
+      return recordStockIn({
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        単価: params.単価 ? Number(params.単価) : undefined,
+        場所ID: params.場所ID,
+        備考: params.備考,
+      });
+    case 'recordStockOut':
+      return recordStockOut({
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        場所ID: params.場所ID,
+        備考: params.備考,
+      });
+    case 'recordStockMove':
+      return recordStockMove({
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        場所ID: params.場所ID,
+        移動先場所ID: params.移動先場所ID,
+        備考: params.備考,
+      });
+    case 'recordStocktakeAdjustment':
+      return recordStocktakeAdjustment({
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        場所ID: params.場所ID,
+        備考: params.備考,
+      });
+    
+    // === 取消・訂正 ===
+    case 'revokeOwnRecord':
+      return revokeOwnRecord(params.トランID);
+    case 'requestCorrection':
+      return requestCorrection({
+        元トランID: params.元トランID,
+        数量: Number(params.数量),
+        理由: params.理由,
+      });
+    case 'approveCorrection':
+      return approveCorrection(params.トランID);
+    case 'rejectCorrection':
+      return rejectCorrection(params.トランID, params.却下理由);
+    
+    // === ロット管理 ===
+    case 'registerLot':
+      return registerLot({
+        品目ID: params.品目ID,
+        ロット番号: params.ロット番号,
+        仕入日: params.仕入日,
+        賞味期限: params.賞味期限,
+        入庫数量: Number(params.入庫数量),
+        備考: params.備考,
+      });
+    case 'getActiveLots':
+      return getActiveLots(params.品目ID);
+    case 'getLotTotalByItemId':
+      return getLotTotalByItemId(params.品目ID);
+    case 'recordStockOutWithLot':
+      return recordStockOutWithLot({
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        場所ID: params.場所ID,
+        備考: params.備考,
+      });
+    case 'getExpiringLots':
+      return getExpiringLots();
+    case 'markExpiredLots':
+      return markExpiredLots();
+    case 'discardLot':
+      return discardLot(params.ロットID, params.廃棄理由);
+    
+    default:
+      throw new Error(`未対応のaction: ${action}`);
+  }
+}
+
+/**
+ * JSONレスポンスを返す
+ */
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj, null, 2))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ===== Web App テスト関数 =====
+
+/**
+ * doGet/doPost を擬似的に呼び出してテスト
+ * 実際のWeb App公開前にロジック確認
+ */
+function testWebApp() {
+  Logger.log('===== Web App ハンドラ テスト =====');
+  
+  try {
+    // 1. authenticate
+    Logger.log('--- 1. authenticate ---');
+    const r1 = handleRequest({ parameter: { action: 'authenticate' } });
+    Logger.log(r1.getContent());
+    
+    // 2. getCurrentStockList
+    Logger.log('\n--- 2. getCurrentStockList ---');
+    const r2 = handleRequest({ parameter: { action: 'getCurrentStockList' } });
+    Logger.log(r2.getContent().substring(0, 500) + '...');
+    
+    // 3. findItemByBarcode (IT001)
+    Logger.log('\n--- 3. findItemByBarcode ---');
+    const r3 = handleRequest({ 
+      parameter: { action: 'findItemByBarcode', barcode: 'IT001' } 
+    });
+    Logger.log(r3.getContent().substring(0, 500));
+    
+    // 4. 不正なaction
+    Logger.log('\n--- 4. 不正なaction ---');
+    const r4 = handleRequest({ parameter: { action: 'deleteAllData' } });
+    Logger.log(r4.getContent());
+    
+    // 5. action未指定
+    Logger.log('\n--- 5. action未指定 ---');
+    const r5 = handleRequest({ parameter: {} });
+    Logger.log(r5.getContent());
+    
+    // 6. getExpiringLots
+    Logger.log('\n--- 6. getExpiringLots ---');
+    const r6 = handleRequest({ parameter: { action: 'getExpiringLots' } });
+    Logger.log(r6.getContent().substring(0, 500));
+    
+    Logger.log('\n===== ✅ Web App テスト完了 =====');
+  } catch (e) {
+    Logger.log('❌ ' + e.message);
+    Logger.log(e.stack);
+  }
+}
+// ============================================================
+// Phase 3a 追加: PC管理画面用API
+// ============================================================
+
+/**
+ * 全ロット一覧（品名・カテゴリを結合）
+ * PC管理画面の「賞味期限」タブで使用
+ */
+function getAllLots() {
+  const lots = getSheetData('T_ロット')
+    .filter(lot => lot['ステータス'] === '有効' && Number(lot['残数量']) > 0);
+
+  const itemCache = {};
+  getSheetData(SHEETS.M_ITEM).forEach(item => {
+    itemCache[item['品目ID']] = item;
+  });
+
+  return lots.map(lot => {
+    const item = itemCache[lot['品目ID']] || {};
+    return {
+      品目ID: lot['品目ID'],
+      品名: item['品名'] || '不明',
+      大カテゴリ: item['大カテゴリ'] || '',
+      ロットID: lot['ロットID'],
+      ロット番号: lot['ロット番号'],
+      残数量: Number(lot['残数量']),
+      賞味期限: lot['賞味期限'] ? Utilities.formatDate(new Date(lot['賞味期限']), 'Asia/Tokyo', 'yyyy-MM-dd') : '',
+      ステータス: lot['ステータス'],
+    };
+  }).sort((a, b) => {
+    if (!a['賞味期限'] || !b['賞味期限']) return 0;
+    return a['賞味期限'] < b['賞味期限'] ? -1 : 1;
+  });
+}
+
+/**
+ * 入出庫履歴（品名・場所名を結合）
+ * PC管理画面の「入出庫履歴」タブで使用
+ */
+function getTransactionHistory() {
+  const data = getSheetData(SHEETS.T_INVENTORY);
+
+  const itemCache = {};
+  getSheetData(SHEETS.M_ITEM).forEach(item => {
+    itemCache[item['品目ID']] = item;
+  });
+
+  const locCache = {};
+  getSheetData(SHEETS.M_LOCATION).forEach(loc => {
+    locCache[loc['場所ID']] = loc;
+  });
+
+  return data
+    .filter(row => row['ステータス'] === '確定' || row['ステータス'] === '承認済')
+    .map(row => {
+      const item = itemCache[row['品目ID']] || {};
+      const loc = locCache[row['場所ID']] || {};
+      return {
+        日時: row['日時'] || '',
+        区分: row['区分'] || '',
+        品目ID: row['品目ID'] || '',
+        品名: item['品名'] || '不明',
+        大カテゴリ: item['大カテゴリ'] || '',
+        数量: Number(row['数量']) || 0,
+        場所名: loc['場所名'] || row['場所ID'] || '',
+        Gmail: row['Gmail'] || '',
+      };
+    })
+    .sort((a, b) => (a['日時'] > b['日時'] ? -1 : 1));
+}
+
+// ============================================================
+// Phase 1-E: Web App ルーティング + デプロイ
+// ============================================================
+
+/**
+ * GETリクエストのハンドラ(データ取得用)
+ * URLの末尾に ?action=getItems のような形でパラメータを渡す
+ *
+ * 例:
+ * https://script.google.com/.../exec?action=getCurrentStockList
+ * https://script.google.com/.../exec?action=getItemById&品目ID=IT001
+ */
+function doGet(e) {
+  return handleRequest(e);
+}
+
+/**
+ * POSTリクエストのハンドラ(データ書き込み用)
+ * リクエストボディに JSON を渡す
+ *
+ * 例:
+ * POST /.../exec
+ * Body: {"action":"recordStockIn","品目ID":"IT001","数量":10}
+ */
+function doPost(e) {
+  return handleRequest(e);
+}
+
+/**
+ * GET/POST 共通ハンドラ
+ */
+function handleRequest(e) {
+  try {
+    // パラメータ取得
+    let params = {};
+
+    // URLクエリパラメータ
+    if (e && e.parameter) {
+      params = Object.assign(params, e.parameter);
+    }
+
+    // POSTボディ(JSON)
+    if (e && e.postData && e.postData.contents) {
+      try {
+        const body = JSON.parse(e.postData.contents);
+        params = Object.assign(params, body);
+      } catch (err) {
+        // JSONでない場合は無視
+      }
+    }
+
+    const action = params.action;
+    if (!action) {
+      return jsonResponse({
+        success: false,
+        error: 'actionパラメータが必要です',
+      });
+    }
+
+    // ホワイトリスト方式: 呼び出し可能な関数を明示
+    const result = dispatchAction(action, params);
+
+    return jsonResponse({
+      success: true,
+      action: action,
+      data: result,
+    });
+  } catch (err) {
+    return jsonResponse({
+      success: false,
+      error: err.message || String(err),
+      stack: err.stack || null,
+    });
+  }
+}
+
+/**
+ * actionに応じて該当関数を呼び出す
+ * セキュリティ: ホワイトリスト方式(任意の関数を呼べないようにする)
+ */
+function dispatchAction(action, params) {
+  switch (action) {
+    // === 認証 ===
+    case 'authenticate':
+      return authenticate();
+
+    // === マスター取得 ===
+    case 'getItems':
+      return getItems({ category: params.category });
+    case 'getItemById':
+      return getItemById(params.品目ID);
+    case 'findItemByBarcode':
+      return findItemByBarcode(params.barcode);
+    case 'searchItemsByName':
+      return searchItemsByName(params.keyword, {
+        category: params.category,
+        limit: params.limit ? Number(params.limit) : undefined,
+      });
+    case 'getCategories':
+      return getCategories();
+    case 'getUsers':
+      return getUsers();
+    case 'getLocations':
+      return getLocations();
+    case 'getDiscounts':
+      return getDiscounts();
+    case 'getCurrentFiscalYear':
+      return getCurrentFiscalYear();
+
+    // === 在庫情報取得 ===
+    case 'getCurrentStockByItemId':
+      return getCurrentStockByItemId(params.品目ID);
+    case 'getCurrentStockList':
+      return getCurrentStockList();
+
+    // === 入出庫(基本) ===
+    case 'recordStockIn':
+      return recordStockIn({
+        gmail: params.gmail,
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        単価: params.単価 ? Number(params.単価) : undefined,
+        場所ID: params.場所ID,
+        備考: params.備考,
+      });
+    case 'recordStockOut':
+      return recordStockOut({
+        gmail: params.gmail,
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        場所ID: params.場所ID,
+        備考: params.備考,
+      });
+    case 'recordStockMove':
+      return recordStockMove({
+        gmail: params.gmail,
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        場所ID: params.場所ID,
+        移動先場所ID: params.移動先場所ID,
+        備考: params.備考,
+      });
+    case 'recordStocktakeAdjustment':
+      return recordStocktakeAdjustment({
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        場所ID: params.場所ID,
+        備考: params.備考,
+      });
+
+    // === 取消・訂正 ===
+    case 'revokeOwnRecord':
+      return revokeOwnRecord(params.トランID);
+    case 'requestCorrection':
+      return requestCorrection({
+        元トランID: params.元トランID,
+        数量: Number(params.数量),
+        理由: params.理由,
+      });
+    case 'approveCorrection':
+      return approveCorrection(params.トランID);
+    case 'rejectCorrection':
+      return rejectCorrection(params.トランID, params.却下理由);
+
+    // === ロット管理 ===
+    case 'registerLot':
+      return registerLot({
+        gmail: params.gmail,
+        品目ID: params.品目ID,
+        ロット番号: params.ロット番号,
+        仕入日: params.仕入日,
+        賞味期限: params.賞味期限,
+        入庫数量: Number(params.入庫数量),
+        備考: params.備考,
+      });
+    case 'getActiveLots':
+      return getActiveLots(params.品目ID);
+    case 'getLotTotalByItemId':
+      return getLotTotalByItemId(params.品目ID);
+    case 'recordStockOutWithLot':
+      return recordStockOutWithLot({
+        gmail: params.gmail,
+        品目ID: params.品目ID,
+        数量: Number(params.数量),
+        場所ID: params.場所ID,
+        備考: params.備考,
+      });
+    case 'getExpiringLots':
+      return getExpiringLots();
+    case 'markExpiredLots':
+      return markExpiredLots();
+    case 'discardLot':
+      return discardLot(params.ロットID, params.廃棄理由, params.gmail);
+
+    // === PC管理画面用 ===
+    case 'getAllLots':
+      return getAllLots();
+    case 'getTransactionHistory':
+      return getTransactionHistory();
+
+    default:
+      throw new Error(`未対応のaction: ${action}`);
+  }
+}
+
+/**
+ * JSONレスポンスを返す
+ */
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj, null, 2))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ===== Web App テスト関数 =====
+
+/**
+ * doGet/doPost を擬似的に呼び出してテスト
+ * 実際のWeb App公開前にロジック確認
+ */
+function testWebApp() {
+  Logger.log('===== Web App ハンドラ テスト =====');
+
+  try {
+    // 1. authenticate
+    Logger.log('--- 1. authenticate ---');
+    const r1 = handleRequest({ parameter: { action: 'authenticate' } });
+    Logger.log(r1.getContent());
+
+    // 2. getCurrentStockList
+    Logger.log('\n--- 2. getCurrentStockList ---');
+    const r2 = handleRequest({ parameter: { action: 'getCurrentStockList' } });
+    Logger.log(r2.getContent().substring(0, 500) + '...');
+
+    // 3. findItemByBarcode (IT001)
+    Logger.log('\n--- 3. findItemByBarcode ---');
+    const r3 = handleRequest({
+      parameter: { action: 'findItemByBarcode', barcode: 'IT001' }
+    });
+    Logger.log(r3.getContent().substring(0, 500));
+
+    // 4. 不正なaction
+    Logger.log('\n--- 4. 不正なaction ---');
+    const r4 = handleRequest({ parameter: { action: 'deleteAllData' } });
+    Logger.log(r4.getContent());
+
+    // 5. action未指定
+    Logger.log('\n--- 5. action未指定 ---');
+    const r5 = handleRequest({ parameter: {} });
+    Logger.log(r5.getContent());
+
+    // 6. getExpiringLots
+    Logger.log('\n--- 6. getExpiringLots ---');
+    const r6 = handleRequest({ parameter: { action: 'getExpiringLots' } });
+    Logger.log(r6.getContent().substring(0, 500));
+
+    Logger.log('\n===== ✅ Web App テスト完了 =====');
+  } catch (e) {
+    Logger.log('❌ ' + e.message);
+    Logger.log(e.stack);
+  }
+}
