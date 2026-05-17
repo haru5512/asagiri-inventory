@@ -23,12 +23,27 @@
     </div>
     <div class="content">
       <div class="menu">
+        <div class="menu-section-label">品目検索</div>
         <button class="btn btn-primary" id="btn-scan" onclick="App.goToScan()">
           <span>&#x1F4F7;</span> スキャン開始
         </button>
         <button class="btn btn-secondary" id="btn-manual" onclick="App.goToManual()">
           <span>&#x2328;</span> 手入力
         </button>
+        <div class="menu-section-label">入出庫</div>
+        <button class="btn btn-primary" onclick="App.startOp('stockin')">
+          <span>&#x1F4E5;</span> 入庫
+        </button>
+        <button class="btn btn-primary" onclick="App.startOp('stockout')">
+          <span>&#x1F4E4;</span> 出庫
+        </button>
+        <button class="btn btn-secondary" onclick="App.startOp('dispose')">
+          <span>&#x1F5D1;</span> 廃棄
+        </button>
+        <button class="btn btn-secondary" onclick="App.startOp('move')">
+          <span>&#x1F504;</span> 移動
+        </button>
+        <div class="menu-divider"></div>
         <button class="btn btn-outline" onclick="App.goToSettings()">
           <span>&#x2699;</span> 設定
         </button>
@@ -118,6 +133,14 @@
         <button class="btn btn-primary" id="btn-save-gmail" onclick="App.saveGmail()" style="margin-top:8px;">
           保存
         </button>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">場所データ</div>
+        <div class="setting-value" id="settings-locations">未取得</div>
+        <button class="btn btn-secondary" id="btn-reload-locations" onclick="App.reloadLocations()" style="margin-top:8px;">
+          場所データを再取得
+        </button>
+        <p class="setting-hint">自動キャッシュ更新は今後のバージョンで実装予定</p>
       </div>
       <div class="setting-item">
         <div class="setting-label">API接続先</div>

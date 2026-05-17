@@ -4,6 +4,20 @@ const App = (() => {
   let codeReader = null;
   let scanning = false;
   let searching = false;
+  let currentOp = null;    // 'stockin' | 'stockout' | 'dispose' | 'move'
+  let currentItem = null;
+  let currentLocations = { from: '', to: '' };
+
+  const OP_LABELS = {
+    stockin: '入庫',
+    stockout: '出庫',
+    dispose: '廃棄',
+    move: '移動',
+  };
+
+  function opLabel() {
+    return OP_LABELS[currentOp] || '';
+  }
 
   // --- DOM ヘルパー ---
   function el(tag, attrs, ...children) {
@@ -128,6 +142,39 @@ const App = (() => {
     return true;
   }
 
+  // --- 場所キャッシュ ---
+  function getCachedLocations() {
+    const data = localStorage.getItem('CACHED_LOCATIONS');
+    return data ? JSON.parse(data) : [];
+  }
+
+  async function fetchLocations() {
+    if (!isApiConfigured()) return [];
+    try {
+      const url = getApiUrl() + '?action=getLocations';
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (json.success && json.data) {
+        localStorage.setItem('CACHED_LOCATIONS', JSON.stringify(json.data));
+        return json.data;
+      }
+    } catch (err) {
+      console.error('Failed to fetch locations:', err);
+    }
+    return getCachedLocations();
+  }
+
+  async function reloadLocations() {
+    const btn = document.getElementById('btn-reload-locations');
+    if (btn) btn.disabled = true;
+    const locations = await fetchLocations();
+    if (btn) btn.disabled = false;
+    const count = locations.length;
+    const locEl = document.getElementById('settings-locations');
+    if (locEl) locEl.textContent = count > 0 ? count + '件キャッシュ済み' : '未取得';
+    alert(count > 0 ? count + '件の場所データを取得しました' : '場所データの取得に失敗しました');
+  }
+
   // --- 画面遷移 ---
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -136,7 +183,17 @@ const App = (() => {
 
   function goToTop() {
     stopScan();
+    currentOp = null;
+    currentItem = null;
     showScreen('screen-top');
+  }
+
+  // --- 入出庫フロー ---
+  function startOp(op) {
+    if (!requireGmail()) return;
+    currentOp = op;
+    currentItem = null;
+    goToOpScan();
   }
 
   function goToScan() {
@@ -155,6 +212,9 @@ const App = (() => {
   function goToSettings() {
     showScreen('screen-settings');
     updateGmailStatus();
+    const locations = getCachedLocations();
+    const locEl = document.getElementById('settings-locations');
+    if (locEl) locEl.textContent = locations.length > 0 ? locations.length + '件キャッシュ済み' : '未取得';
   }
 
   // --- ZXing 遅延読み込み ---
@@ -344,5 +404,7 @@ const App = (() => {
     lookupItem,
     saveApiUrl,
     saveGmail,
+    reloadLocations,
+    startOp,
   };
 })();

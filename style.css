@@ -137,6 +137,21 @@ html, body {
   gap: 16px;
 }
 
+.menu-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-top: 8px;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 /* Video container */
 .video-container {
   position: relative;
@@ -326,4 +341,10 @@ html, body {
 
 .setting-value.not-connected {
   color: var(--danger);
+}
+
+.setting-hint {
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 8px;
 }
