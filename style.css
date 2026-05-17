@@ -202,6 +202,23 @@ html, body {
   border-color: var(--primary);
 }
 
+.form-select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 16px;
+  outline: none;
+  background: #fff;
+  transition: border-color 0.2s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.form-select:focus {
+  border-color: var(--primary);
+}
+
 /* Result card */
 .result-card {
   background: var(--card-bg);

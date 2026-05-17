@@ -64,6 +64,9 @@ const App = (() => {
     document.getElementById('input-barcode').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') searchManual();
     });
+    document.getElementById('input-op-barcode').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') searchOpManual();
+    });
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -185,6 +188,7 @@ const App = (() => {
     stopScan();
     currentOp = null;
     currentItem = null;
+    currentLocations = { from: '', to: '' };
     showScreen('screen-top');
   }
 
@@ -194,6 +198,376 @@ const App = (() => {
     currentOp = op;
     currentItem = null;
     goToOpScan();
+  }
+
+  function goToOpScan() {
+    document.getElementById('op-scan-title').textContent = opLabel() + ' - スキャン';
+    showScreen('screen-op-scan');
+    startOpScan();
+  }
+
+  function goToOpManual(fromCameraError) {
+    stopScan();
+    document.getElementById('op-manual-title').textContent = opLabel() + ' - 手入力';
+    document.getElementById('op-camera-banner').style.display = fromCameraError ? 'block' : 'none';
+    showScreen('screen-op-manual');
+    document.getElementById('input-op-barcode').value = '';
+    document.getElementById('input-op-barcode').focus();
+  }
+
+  function startOpScan() {
+    if (scanning) return;
+    loadZXing()
+      .then(() => {
+        if (!codeReader) {
+          codeReader = new ZXing.BrowserMultiFormatReader();
+        }
+        return codeReader.listVideoInputDevices();
+      })
+      .then(devices => {
+        if (devices.length === 0) throw new Error('カメラが見つかりません');
+        const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
+        const videoEl = document.getElementById('op-scan-video');
+        scanning = true;
+        codeReader.decodeFromVideoDevice(
+          backCam.deviceId,
+          videoEl,
+          (result, err) => {
+            if (result) {
+              const code = result.getText();
+              stopScan();
+              lookupOpItem(code);
+            }
+            if (err && !(err instanceof ZXing.NotFoundException)) {
+              console.error('Scan error:', err);
+            }
+          }
+        );
+      })
+      .catch(err => {
+        console.error('Camera/ZXing error:', err);
+        scanning = false;
+        goToOpManual(true);
+      });
+  }
+
+  function searchOpManual() {
+    const input = document.getElementById('input-op-barcode').value.trim();
+    if (!input) return;
+    lookupOpItem(input);
+  }
+
+  async function lookupOpItem(barcode) {
+    if (searching) return;
+    if (!isApiConfigured()) {
+      alert('API未設定です。設定画面から Web App URL を入力してください。');
+      goToSettings();
+      return;
+    }
+    searching = true;
+    showScreen('screen-loading');
+    try {
+      const url = getApiUrl() + '?action=findItemByBarcode&barcode=' + encodeURIComponent(barcode);
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '不明なエラー');
+      if (json.data) {
+        currentItem = json.data;
+        goToOpInput();
+      } else {
+        alert('未登録のコードです: ' + barcode);
+        goToOpScan();
+      }
+    } catch (err) {
+      alert('通信エラー: ' + err.message);
+      goToOpScan();
+    } finally {
+      searching = false;
+    }
+  }
+
+  // --- 数量入力画面 ---
+  function renderItemInfo(container, item) {
+    clearAndAppend(container,
+      el('div', { className: 'result-card' },
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, '品目ID'),
+          el('span', { className: 'result-value' }, item['品目ID'])
+        ),
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, '品名'),
+          el('span', { className: 'result-value' }, item['品名'])
+        ),
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, '単位'),
+          el('span', { className: 'result-value' }, item['単位'] || '-')
+        ),
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, 'ロット管理'),
+          el('span', { className: 'result-value' }, item['ロット管理'] ? 'あり' : 'なし')
+        )
+      )
+    );
+  }
+
+  function buildLocationSelect(id, required) {
+    const locations = getCachedLocations();
+    const select = el('select', { id: id, className: 'form-select' });
+    if (!required) {
+      select.appendChild(el('option', { value: '' }, '-- 未指定（主場所） --'));
+    } else {
+      select.appendChild(el('option', { value: '' }, '-- 選択してください --'));
+    }
+    for (const loc of locations) {
+      const opt = el('option', { value: loc['場所ID'] }, loc['場所名'] || loc['場所ID']);
+      select.appendChild(opt);
+    }
+    return select;
+  }
+
+  function goToOpInput() {
+    document.getElementById('op-input-title').textContent = opLabel() + ' - 入力';
+    renderItemInfo(document.getElementById('op-item-info'), currentItem);
+
+    const form = document.getElementById('op-input-form');
+    form.textContent = '';
+
+    // Quantity
+    form.appendChild(el('div', { className: 'form-group' },
+      el('label', { for: 'input-op-qty' }, '数量'),
+      el('input', { type: 'number', id: 'input-op-qty', min: '1', placeholder: '数量を入力', inputmode: 'numeric' })
+    ));
+
+    // Location fields based on operation type
+    if (currentOp === 'move') {
+      form.appendChild(el('div', { className: 'form-group' },
+        el('label', {}, '移動元'),
+        buildLocationSelect('input-op-loc-from', true)
+      ));
+      form.appendChild(el('div', { className: 'form-group' },
+        el('label', {}, '移動先'),
+        buildLocationSelect('input-op-loc-to', true)
+      ));
+      if (currentLocations.from) {
+        document.getElementById('input-op-loc-from').value = currentLocations.from;
+      }
+      if (currentLocations.to) {
+        document.getElementById('input-op-loc-to').value = currentLocations.to;
+      }
+    } else if (currentOp === 'stockout' || currentOp === 'dispose') {
+      form.appendChild(el('div', { className: 'form-group' },
+        el('label', {}, '場所'),
+        buildLocationSelect('input-op-loc-from', true)
+      ));
+      if (currentLocations.from) {
+        document.getElementById('input-op-loc-from').value = currentLocations.from;
+      }
+    } else if (currentOp === 'stockin') {
+      form.appendChild(el('div', { className: 'form-group' },
+        el('label', {}, '場所（任意）'),
+        buildLocationSelect('input-op-loc-from', false)
+      ));
+      if (currentLocations.from) {
+        document.getElementById('input-op-loc-from').value = currentLocations.from;
+      }
+    }
+
+    showScreen('screen-op-input');
+  }
+
+  // --- 確認画面 + API + 完了画面 ---
+  function collectOpFormData() {
+    const qty = parseInt(document.getElementById('input-op-qty').value, 10);
+    if (!qty || qty <= 0) {
+      alert('数量を正しく入力してください。');
+      return null;
+    }
+
+    const data = {
+      op: currentOp,
+      itemId: currentItem['品目ID'],
+      itemName: currentItem['品名'],
+      qty: qty,
+      unit: currentItem['単位'] || '',
+      gmail: getGmail(),
+    };
+
+    if (currentOp === 'move') {
+      data.fromLocationId = document.getElementById('input-op-loc-from').value;
+      data.toLocationId = document.getElementById('input-op-loc-to').value;
+      if (!data.fromLocationId || !data.toLocationId) {
+        alert('移動元と移動先を選択してください。');
+        return null;
+      }
+      if (data.fromLocationId === data.toLocationId) {
+        alert('移動元と移動先が同じです。');
+        return null;
+      }
+    } else if (currentOp === 'stockout' || currentOp === 'dispose') {
+      data.fromLocationId = document.getElementById('input-op-loc-from').value;
+      if (!data.fromLocationId) {
+        alert('場所を選択してください。');
+        return null;
+      }
+    } else if (currentOp === 'stockin') {
+      const locEl = document.getElementById('input-op-loc-from');
+      data.fromLocationId = locEl ? locEl.value : '';
+    }
+
+    // Persist location selections for "continue scanning"
+    currentLocations.from = data.fromLocationId || '';
+    currentLocations.to = data.toLocationId || '';
+
+    return data;
+  }
+
+  function locationName(id) {
+    if (!id) return '主場所';
+    const locations = getCachedLocations();
+    const loc = locations.find(l => l['場所ID'] === id);
+    return loc ? (loc['場所名'] || id) : id;
+  }
+
+  function goToOpConfirm() {
+    const data = collectOpFormData();
+    if (!data) return;
+
+    document.getElementById('op-confirm-title').textContent = opLabel() + ' - 確認';
+
+    const card = el('div', { className: 'result-card' },
+      el('div', { className: 'result-header found' }, opLabel() + 'の確認')
+    );
+
+    const rows = [
+      ['品目ID', data.itemId],
+      ['品名', data.itemName],
+      ['区分', opLabel()],
+      ['数量', data.qty + ' ' + data.unit],
+    ];
+
+    if (currentOp === 'move') {
+      rows.push(['移動元', locationName(data.fromLocationId)]);
+      rows.push(['移動先', locationName(data.toLocationId)]);
+    } else if (data.fromLocationId) {
+      rows.push(['場所', locationName(data.fromLocationId)]);
+    }
+
+    rows.push(['担当者', data.gmail]);
+
+    for (const [label, value] of rows) {
+      card.appendChild(
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, label),
+          el('span', { className: 'result-value' }, String(value))
+        )
+      );
+    }
+
+    clearAndAppend(document.getElementById('op-confirm-content'), card);
+    showScreen('screen-op-confirm');
+  }
+
+  async function recordOp() {
+    const data = collectOpFormData();
+    if (!data) return;
+
+    const btn = document.getElementById('btn-op-record');
+    btn.disabled = true;
+    showScreen('screen-loading');
+
+    try {
+      let apiAction, params;
+
+      if (currentOp === 'stockin') {
+        apiAction = 'recordStockIn';
+        params = {
+          gmail: data.gmail,
+          itemId: data.itemId,
+          qty: data.qty,
+          locationId: data.fromLocationId || '',
+        };
+      } else if (currentOp === 'stockout') {
+        apiAction = 'recordStockOut';
+        params = {
+          gmail: data.gmail,
+          itemId: data.itemId,
+          qty: data.qty,
+          locationId: data.fromLocationId,
+          type: '出庫消費',
+        };
+      } else if (currentOp === 'dispose') {
+        apiAction = 'recordStockOut';
+        params = {
+          gmail: data.gmail,
+          itemId: data.itemId,
+          qty: data.qty,
+          locationId: data.fromLocationId,
+          type: '廃棄',
+        };
+      } else if (currentOp === 'move') {
+        apiAction = 'recordStockMove';
+        params = {
+          gmail: data.gmail,
+          itemId: data.itemId,
+          qty: data.qty,
+          fromLocationId: data.fromLocationId,
+          toLocationId: data.toLocationId,
+        };
+      }
+
+      const query = Object.entries(params)
+        .map(([k, v]) => k + '=' + encodeURIComponent(v))
+        .join('&');
+      const url = getApiUrl() + '?action=' + apiAction + '&' + query;
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+
+      if (!json.success) throw new Error(json.error || '記録に失敗しました');
+
+      showOpDone(true, data, json);
+    } catch (err) {
+      showOpDone(false, data, null, err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function showOpDone(success, data, json, errorMsg) {
+    const content = document.getElementById('op-done-content');
+    const actions = document.getElementById('op-done-actions');
+
+    if (success) {
+      clearAndAppend(content,
+        el('div', { className: 'result-card' },
+          el('div', { className: 'result-header found' }, opLabel() + '完了'),
+          el('div', { className: 'result-row' },
+            el('span', { className: 'result-label' }, '品名'),
+            el('span', { className: 'result-value' }, data.itemName)
+          ),
+          el('div', { className: 'result-row' },
+            el('span', { className: 'result-label' }, '数量'),
+            el('span', { className: 'result-value' }, data.qty + ' ' + data.unit)
+          )
+        )
+      );
+    } else {
+      clearAndAppend(content,
+        el('div', { className: 'result-card' },
+          el('div', { className: 'result-header error' }, '記録失敗'),
+          el('div', { className: 'error-detail' }, errorMsg)
+        )
+      );
+    }
+
+    clearAndAppend(actions,
+      el('button', { className: 'btn btn-primary', onClick: () => {
+        currentItem = null;
+        goToOpScan();
+      }}, '続けてスキャン（' + opLabel() + '）'),
+      el('button', { className: 'btn btn-secondary', onClick: goToTop }, 'トップに戻る')
+    );
+
+    showScreen('screen-op-done');
   }
 
   function goToScan() {
@@ -406,5 +780,11 @@ const App = (() => {
     saveGmail,
     reloadLocations,
     startOp,
+    goToOpScan,
+    goToOpManual,
+    searchOpManual,
+    goToOpInput,
+    goToOpConfirm,
+    recordOp,
   };
 })();
