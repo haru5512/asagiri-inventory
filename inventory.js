@@ -34,19 +34,19 @@ const Inv = (() => {
   // --- Tab config ---
   const TAB_CONFIG = {
     stock: {
-      api: 'getStockSummary',
+      api: 'getCurrentStockList',
       columns: [
         { key: '品目ID', label: '品目ID' },
         { key: '品名', label: '品名' },
         { key: '大カテゴリ', label: 'カテゴリ' },
-        { key: '数量', label: '数量', align: 'right' },
+        { key: '現在在庫数', label: '数量', align: 'right' },
         { key: '単位', label: '単位' },
-        { key: '場所名', label: '場所' },
+        { key: 'アラート', label: 'アラート' },
       ],
       filters: ['category', 'itemName', 'location'],
     },
     lots: {
-      api: 'getLotList',
+      api: 'getAllLots',
       columns: [
         { key: '品目ID', label: '品目ID' },
         { key: '品名', label: '品名' },

@@ -328,7 +328,7 @@ const App = (() => {
   async function fetchItemLots(itemId) {
     if (!isApiConfigured()) return [];
     try {
-      const url = getApiUrl() + '?action=getItemLots&itemId=' + encodeURIComponent(itemId);
+      const url = getApiUrl() + '?action=getActiveLots&品目ID=' + encodeURIComponent(itemId);
       const res = await fetch(url, { method: 'GET', redirect: 'follow' });
       const json = await res.json();
       if (json.success && json.data) return json.data;
@@ -571,43 +571,67 @@ const App = (() => {
     try {
       let apiAction, params;
 
+      // GAS API パラメータ名マッピング:
+      // PWA: itemId/qty/locationId → GAS: 品目ID/数量/場所ID
+
       if (currentOp === 'stockin') {
-        apiAction = 'recordStockIn';
-        params = {
-          gmail: data.gmail,
-          itemId: data.itemId,
-          qty: data.qty,
-          locationId: data.fromLocationId || '',
-        };
-        if (data.lotNumber) params.lotNumber = data.lotNumber;
-        if (data.expiry) params.expiry = data.expiry;
+        if (data.lotNumber && data.expiry) {
+          // ロット管理品 → registerLot (T_ロット + T_入出庫 に同時登録)
+          apiAction = 'registerLot';
+          params = {
+            gmail: data.gmail,
+            品目ID: data.itemId,
+            入庫数量: data.qty,
+            ロット番号: data.lotNumber,
+            賞味期限: data.expiry,
+          };
+        } else {
+          // 通常品 → recordStockIn
+          apiAction = 'recordStockIn';
+          params = {
+            gmail: data.gmail,
+            品目ID: data.itemId,
+            数量: data.qty,
+            場所ID: data.fromLocationId || '',
+          };
+        }
       } else if (currentOp === 'stockout') {
-        apiAction = 'recordStockOut';
+        // recordStockOutWithLot はロット品なら自動FIFO、通常品なら通常出庫
+        apiAction = 'recordStockOutWithLot';
         params = {
           gmail: data.gmail,
-          itemId: data.itemId,
-          qty: data.qty,
-          locationId: data.fromLocationId,
-          type: '出庫消費',
+          品目ID: data.itemId,
+          数量: data.qty,
+          場所ID: data.fromLocationId,
         };
       } else if (currentOp === 'dispose') {
-        apiAction = 'recordStockOut';
-        params = {
-          gmail: data.gmail,
-          itemId: data.itemId,
-          qty: data.qty,
-          locationId: data.fromLocationId,
-          type: '廃棄',
-        };
-        if (data.lotId) params.lotId = data.lotId;
+        if (data.lotId) {
+          // ロット管理品 → discardLot
+          apiAction = 'discardLot';
+          params = {
+            gmail: data.gmail,
+            ロットID: data.lotId,
+            廃棄理由: '現場廃棄',
+          };
+        } else {
+          // 通常品 → recordStockOut で廃棄区分
+          apiAction = 'recordStockOut';
+          params = {
+            gmail: data.gmail,
+            品目ID: data.itemId,
+            数量: data.qty,
+            場所ID: data.fromLocationId,
+            備考: '廃棄',
+          };
+        }
       } else if (currentOp === 'move') {
         apiAction = 'recordStockMove';
         params = {
           gmail: data.gmail,
-          itemId: data.itemId,
-          qty: data.qty,
-          fromLocationId: data.fromLocationId,
-          toLocationId: data.toLocationId,
+          品目ID: data.itemId,
+          数量: data.qty,
+          場所ID: data.fromLocationId,
+          移動先場所ID: data.toLocationId,
         };
       }
 
@@ -645,16 +669,17 @@ const App = (() => {
         )
       );
 
-      // Show FIFO allocation results if available
-      if (json.data && json.data.lotAllocations && json.data.lotAllocations.length > 0) {
+      // Show FIFO allocation results if available (GAS: 引当詳細)
+      const allocs = json.data && json.data['引当詳細'];
+      if (allocs && allocs.length > 0) {
         const allocDiv = el('div', { className: 'lot-allocation' },
           el('div', { className: 'lot-allocation-title' }, 'FIFO 引き当て結果')
         );
-        for (const alloc of json.data.lotAllocations) {
+        for (const alloc of allocs) {
           allocDiv.appendChild(
             el('div', { className: 'lot-allocation-row' },
-              el('span', {}, alloc.lotId + ': ' + alloc.qty + '個'),
-              el('span', { className: 'lot-expiry' }, '期限: ' + (alloc.expiry || '-'))
+              el('span', {}, (alloc['ロット番号'] || alloc['ロットID']) + ': ' + alloc['引当数量'] + '個'),
+              el('span', { className: 'lot-expiry' }, '期限: ' + (alloc['賞味期限'] || '-'))
             )
           );
         }
