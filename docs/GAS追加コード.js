@@ -264,13 +264,13 @@ function getTransactionHistory() {
  * @returns {Object} { success: true, data: { 品目ID: "ITxxx" } }
  */
 function registerItem(params) {
-  var auth = params.gmail ? requireGmailAuth(params.gmail) : requireAuth();
+  var auth = params.gmail ? requireGmailAuth(params.gmail, params.password) : requireAuth();
 
   if (!params['品名']) throw new Error('品名は必須です');
   if (!params['大カテゴリ']) throw new Error('大カテゴリは必須です');
   if (!params['単位']) throw new Error('単位は必須です');
 
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('M_品目');
+  var sheet = getCurrentSpreadsheet().getSheetByName('M_品目');
   var data = sheet.getDataRange().getValues();
   var headers = data[0];
 
@@ -300,7 +300,7 @@ function registerItem(params) {
       case '販売単価': return Number(params['販売単価']) || 0;
       case 'ロット管理': return params['ロット管理'] === 'TRUE';
       case '賞味期限管理': return params['賞味期限管理'] === 'TRUE';
-      case '税率': return Number(params['税率']) || 8;
+      case '税率': return Number(params['税率']) || 0.08;
       case '閾値': return params['閾値'] ? Number(params['閾値']) : '';
       case '主場所ID': return params['主場所ID'] || '';
       case '有効': return true;
@@ -308,7 +308,12 @@ function registerItem(params) {
     }
   });
 
-  sheet.appendRow(newRow);
+  // データがある最終行の次に挿入（空行を飛ばさない）
+  var lastDataRow = idCol >= 0 ? 1 : 1;
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][idCol]) { lastDataRow = i + 1; break; }
+  }
+  sheet.getRange(lastDataRow + 1, 1, 1, newRow.length).setValues([newRow]);
 
   return { success: true, data: { '品目ID': newId } };
 }
