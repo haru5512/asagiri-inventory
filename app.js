@@ -45,6 +45,7 @@ const App = (() => {
     document.getElementById('settings-version').textContent = CONFIG.APP_VERSION;
 
     updateApiStatus();
+    updateGmailStatus();
 
     document.getElementById('input-barcode').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') searchManual();
@@ -83,6 +84,50 @@ const App = (() => {
     alert('保存しました');
   }
 
+  // --- Gmail 管理 ---
+  function getGmail() {
+    return localStorage.getItem('USER_GMAIL') || '';
+  }
+
+  function isGmailConfigured() {
+    const gmail = getGmail();
+    return gmail && gmail.includes('@');
+  }
+
+  function updateGmailStatus() {
+    const gmailEl = document.getElementById('settings-gmail');
+    const gmailInput = document.getElementById('input-gmail');
+    if (isGmailConfigured()) {
+      gmailEl.textContent = getGmail();
+      gmailEl.className = 'setting-value connected';
+      if (gmailInput) gmailInput.value = getGmail();
+    } else {
+      gmailEl.textContent = '未設定';
+      gmailEl.className = 'setting-value not-connected';
+      if (gmailInput) gmailInput.value = '';
+    }
+  }
+
+  function saveGmail() {
+    const input = document.getElementById('input-gmail').value.trim();
+    if (!input || !input.includes('@')) {
+      alert('正しいメールアドレスを入力してください。');
+      return;
+    }
+    localStorage.setItem('USER_GMAIL', input);
+    updateGmailStatus();
+    alert('保存しました');
+  }
+
+  function requireGmail() {
+    if (!isGmailConfigured()) {
+      alert('担当者メールが未設定です。\n設定画面からメールアドレスを入力してください。');
+      goToSettings();
+      return false;
+    }
+    return true;
+  }
+
   // --- 画面遷移 ---
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -109,6 +154,7 @@ const App = (() => {
 
   function goToSettings() {
     showScreen('screen-settings');
+    updateGmailStatus();
   }
 
   // --- ZXing 遅延読み込み ---
@@ -297,5 +343,6 @@ const App = (() => {
     searchManual,
     lookupItem,
     saveApiUrl,
+    saveGmail,
   };
 })();
