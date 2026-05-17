@@ -393,5 +393,15 @@ const Inv = (() => {
   // --- Start ---
   init();
 
-  return { switchTab, fetchData, login };
+  function logout() {
+    localStorage.removeItem('USER_GMAIL');
+    localStorage.removeItem('USER_PASSWORD');
+    document.getElementById('main-page').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-password').value = '';
+    rawData = { stock: [], lots: [], history: [] };
+  }
+
+  return { switchTab, fetchData, login, logout };
 })();

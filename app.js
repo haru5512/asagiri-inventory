@@ -150,6 +150,13 @@ const App = (() => {
     alert('ログイン情報を保存しました');
   }
 
+  function logout() {
+    localStorage.removeItem('USER_GMAIL');
+    localStorage.removeItem('USER_PASSWORD');
+    updateGmailStatus();
+    alert('ログアウトしました');
+  }
+
   function requireGmail() {
     if (!isGmailConfigured()) {
       alert('ログインが必要です。\n設定画面からメールアドレスとパスワードを入力してください。');
@@ -929,6 +936,7 @@ const App = (() => {
     lookupItem,
     saveApiUrl,
     saveLogin,
+    logout,
     reloadLocations,
     startOp,
     goToOpScan,
