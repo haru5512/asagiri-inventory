@@ -3,6 +3,8 @@
 const Inv = (() => {
   let currentTab = 'stock';
   let rawData = { stock: [], lots: [], history: [] };
+  let sortKey = '';
+  let sortAsc = true;
 
   // --- DOM helper ---
   function el(tag, attrs, ...children) {
@@ -139,6 +141,8 @@ const Inv = (() => {
   // --- Tab ---
   function switchTab(tab) {
     currentTab = tab;
+    sortKey = '';
+    sortAsc = true;
     document.querySelectorAll('.tab').forEach(t => {
       t.classList.toggle('active', t.dataset.tab === tab);
     });
@@ -167,8 +171,19 @@ const Inv = (() => {
     const tr = document.createElement('tr');
     for (const col of config.columns) {
       const th = document.createElement('th');
-      th.textContent = col.label;
+      const arrow = sortKey === col.key ? (sortAsc ? ' ▲' : ' ▼') : '';
+      th.textContent = col.label + arrow;
       if (col.align) th.style.textAlign = col.align;
+      th.addEventListener('click', () => {
+        if (sortKey === col.key) {
+          sortAsc = !sortAsc;
+        } else {
+          sortKey = col.key;
+          sortAsc = true;
+        }
+        renderTableHead();
+        renderTableBody();
+      });
       tr.appendChild(th);
     }
     const thead = document.getElementById('table-head');
@@ -188,7 +203,21 @@ const Inv = (() => {
   function renderTableBody() {
     const config = TAB_CONFIG[currentTab];
     const data = rawData[currentTab];
-    const filtered = applyFilters(data);
+    let filtered = applyFilters(data);
+
+    if (sortKey) {
+      filtered = filtered.slice().sort((a, b) => {
+        const va = a[sortKey] != null ? a[sortKey] : '';
+        const vb = b[sortKey] != null ? b[sortKey] : '';
+        if (typeof va === 'number' && typeof vb === 'number') {
+          return sortAsc ? va - vb : vb - va;
+        }
+        const sa = String(va);
+        const sb = String(vb);
+        const cmp = sa.localeCompare(sb, 'ja');
+        return sortAsc ? cmp : -cmp;
+      });
+    }
 
     const tbody = document.getElementById('table-body');
     const emptyMsg = document.getElementById('empty-message');
