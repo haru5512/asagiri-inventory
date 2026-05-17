@@ -1,4 +1,4 @@
-// Asagiri Inventory - Phase 2: バーコードスキャン + 品目検索
+// Asagiri Inventory - Phase 3a: 入出庫記録 + バーコードスキャン + 品目検索
 
 const App = (() => {
   let codeReader = null;
