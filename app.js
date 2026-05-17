@@ -369,8 +369,8 @@ const App = (() => {
       }
     } else if (currentOp === 'stockout' || currentOp === 'dispose') {
       form.appendChild(el('div', { className: 'form-group' },
-        el('label', {}, '場所'),
-        buildLocationSelect('input-op-loc-from', true)
+        el('label', {}, '場所（任意）'),
+        buildLocationSelect('input-op-loc-from', false)
       ));
       if (currentLocations.from) {
         document.getElementById('input-op-loc-from').value = currentLocations.from;
@@ -456,11 +456,8 @@ const App = (() => {
         return null;
       }
     } else if (currentOp === 'stockout' || currentOp === 'dispose') {
-      data.fromLocationId = document.getElementById('input-op-loc-from').value;
-      if (!data.fromLocationId) {
-        alert('場所を選択してください。');
-        return null;
-      }
+      const locEl = document.getElementById('input-op-loc-from');
+      data.fromLocationId = locEl ? locEl.value : '';
     } else if (currentOp === 'stockin') {
       const locEl = document.getElementById('input-op-loc-from');
       data.fromLocationId = locEl ? locEl.value : '';
