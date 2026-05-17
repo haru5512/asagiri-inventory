@@ -9,6 +9,9 @@ const PRECACHE = [
   './style.css',
   './config.js',
   './manifest.json',
+  './inventory.html',
+  './inventory.js',
+  './inventory.css',
 ];
 
 self.addEventListener('install', (event) => {

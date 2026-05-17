@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asagiri Inventory - 在庫管理</title>
+  <link rel="stylesheet" href="./inventory.css">
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1>Asagiri Inventory - 在庫管理</h1>
+      <button class="btn-print" onclick="window.print()">印刷</button>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="stock" onclick="Inv.switchTab('stock')">現在在庫</button>
+      <button class="tab" data-tab="lots" onclick="Inv.switchTab('lots')">賞味期限</button>
+      <button class="tab" data-tab="history" onclick="Inv.switchTab('history')">入出庫履歴</button>
+    </nav>
+
+    <div class="filters" id="filters"></div>
+
+    <div class="table-container">
+      <table id="data-table">
+        <thead id="table-head"></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+      <div id="empty-message" class="empty-message" style="display:none;">
+        データがありません。「データ取得」ボタンを押してください。
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      <span id="row-count">表示: 0件</span>
+    </footer>
+  </div>
+
+  <script src="./config.js"></script>
+  <script src="./inventory.js"></script>
+</body>
+</html>
