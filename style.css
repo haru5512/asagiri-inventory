@@ -360,6 +360,31 @@ html, body {
   color: var(--danger);
 }
 
+.lot-allocation {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.lot-allocation-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+  margin-bottom: 8px;
+}
+
+.lot-allocation-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 14px;
+}
+
+.lot-expiry {
+  color: var(--text-light);
+  font-size: 13px;
+}
+
 .setting-hint {
   font-size: 12px;
   color: var(--text-light);

@@ -325,6 +325,19 @@ const App = (() => {
     return select;
   }
 
+  async function fetchItemLots(itemId) {
+    if (!isApiConfigured()) return [];
+    try {
+      const url = getApiUrl() + '?action=getItemLots&itemId=' + encodeURIComponent(itemId);
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (json.success && json.data) return json.data;
+    } catch (err) {
+      console.error('Failed to fetch lots:', err);
+    }
+    return [];
+  }
+
   function goToOpInput() {
     document.getElementById('op-input-title').textContent = opLabel() + ' - 入力';
     renderItemInfo(document.getElementById('op-item-info'), currentItem);
@@ -372,6 +385,45 @@ const App = (() => {
       }
     }
 
+    // Lot selection for dispose
+    if (currentOp === 'dispose' && currentItem['ロット管理']) {
+      const lotGroup = el('div', { className: 'form-group' },
+        el('label', {}, 'ロット選択'),
+        el('select', { id: 'input-op-lot-id', className: 'form-select' },
+          el('option', { value: '' }, '読み込み中...')
+        )
+      );
+      form.appendChild(lotGroup);
+
+      fetchItemLots(currentItem['品目ID']).then(lots => {
+        const select = document.getElementById('input-op-lot-id');
+        if (!select) return;
+        select.textContent = '';
+        if (lots.length === 0) {
+          select.appendChild(el('option', { value: '' }, '有効なロットがありません'));
+        } else {
+          select.appendChild(el('option', { value: '' }, '-- 選択してください --'));
+          for (const lot of lots) {
+            const label = lot['ロットID'] + ' / ' + lot['ロット番号']
+              + ' (残' + lot['残数量'] + ', 期限: ' + (lot['賞味期限'] || '-') + ')';
+            select.appendChild(el('option', { value: lot['ロットID'] }, label));
+          }
+        }
+      });
+    }
+
+    // Lot management fields for stockin
+    if (currentOp === 'stockin' && currentItem['ロット管理']) {
+      form.appendChild(el('div', { className: 'form-group' },
+        el('label', { for: 'input-op-lot-number' }, 'ロット番号'),
+        el('input', { type: 'text', id: 'input-op-lot-number', placeholder: 'ロット番号を入力', autocomplete: 'off' })
+      ));
+      form.appendChild(el('div', { className: 'form-group' },
+        el('label', { for: 'input-op-expiry' }, '賞味期限'),
+        el('input', { type: 'date', id: 'input-op-expiry' })
+      ));
+    }
+
     showScreen('screen-op-input');
   }
 
@@ -414,6 +466,34 @@ const App = (() => {
       data.fromLocationId = locEl ? locEl.value : '';
     }
 
+    // Lot selection for dispose
+    if (currentOp === 'dispose' && currentItem['ロット管理']) {
+      const lotEl = document.getElementById('input-op-lot-id');
+      data.lotId = lotEl ? lotEl.value : '';
+      if (!data.lotId) {
+        alert('ロットを選択してください。');
+        return null;
+      }
+    }
+
+    // Lot data for stockin
+    if (currentOp === 'stockin' && currentItem['ロット管理']) {
+      const lotNumEl = document.getElementById('input-op-lot-number');
+      const expiryEl = document.getElementById('input-op-expiry');
+      if (lotNumEl && expiryEl) {
+        data.lotNumber = lotNumEl.value.trim();
+        data.expiry = expiryEl.value;
+        if (!data.lotNumber) {
+          alert('ロット番号を入力してください。');
+          return null;
+        }
+        if (!data.expiry) {
+          alert('賞味期限を入力してください。');
+          return null;
+        }
+      }
+    }
+
     // Persist location selections for "continue scanning"
     currentLocations.from = data.fromLocationId || '';
     currentLocations.to = data.toLocationId || '';
@@ -452,6 +532,19 @@ const App = (() => {
       rows.push(['場所', locationName(data.fromLocationId)]);
     }
 
+    if (data.lotNumber) {
+      rows.push(['ロット番号', data.lotNumber]);
+    }
+    if (data.expiry) {
+      rows.push(['賞味期限', data.expiry]);
+    }
+    if (data.lotId) {
+      rows.push(['ロットID', data.lotId]);
+    }
+    if (currentOp === 'stockout' && currentItem['ロット管理']) {
+      rows.push(['ロット引き当て', 'FIFO自動（記録後に結果表示）']);
+    }
+
     rows.push(['担当者', data.gmail]);
 
     for (const [label, value] of rows) {
@@ -486,6 +579,8 @@ const App = (() => {
           qty: data.qty,
           locationId: data.fromLocationId || '',
         };
+        if (data.lotNumber) params.lotNumber = data.lotNumber;
+        if (data.expiry) params.expiry = data.expiry;
       } else if (currentOp === 'stockout') {
         apiAction = 'recordStockOut';
         params = {
@@ -504,6 +599,7 @@ const App = (() => {
           locationId: data.fromLocationId,
           type: '廃棄',
         };
+        if (data.lotId) params.lotId = data.lotId;
       } else if (currentOp === 'move') {
         apiAction = 'recordStockMove';
         params = {
@@ -537,19 +633,35 @@ const App = (() => {
     const actions = document.getElementById('op-done-actions');
 
     if (success) {
-      clearAndAppend(content,
-        el('div', { className: 'result-card' },
-          el('div', { className: 'result-header found' }, opLabel() + '完了'),
-          el('div', { className: 'result-row' },
-            el('span', { className: 'result-label' }, '品名'),
-            el('span', { className: 'result-value' }, data.itemName)
-          ),
-          el('div', { className: 'result-row' },
-            el('span', { className: 'result-label' }, '数量'),
-            el('span', { className: 'result-value' }, data.qty + ' ' + data.unit)
-          )
+      const card = el('div', { className: 'result-card' },
+        el('div', { className: 'result-header found' }, opLabel() + '完了'),
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, '品名'),
+          el('span', { className: 'result-value' }, data.itemName)
+        ),
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, '数量'),
+          el('span', { className: 'result-value' }, data.qty + ' ' + data.unit)
         )
       );
+
+      // Show FIFO allocation results if available
+      if (json.data && json.data.lotAllocations && json.data.lotAllocations.length > 0) {
+        const allocDiv = el('div', { className: 'lot-allocation' },
+          el('div', { className: 'lot-allocation-title' }, 'FIFO 引き当て結果')
+        );
+        for (const alloc of json.data.lotAllocations) {
+          allocDiv.appendChild(
+            el('div', { className: 'lot-allocation-row' },
+              el('span', {}, alloc.lotId + ': ' + alloc.qty + '個'),
+              el('span', { className: 'lot-expiry' }, '期限: ' + (alloc.expiry || '-'))
+            )
+          );
+        }
+        card.appendChild(allocDiv);
+      }
+
+      clearAndAppend(content, card);
     } else {
       clearAndAppend(content,
         el('div', { className: 'result-card' },
