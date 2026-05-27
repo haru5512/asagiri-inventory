@@ -336,6 +336,73 @@ function approveStocktake(params) {
 }
 
 
+// ===== 8. 棚卸明細の実数を一括更新（承認前修正用） =====
+
+function updateStocktakeCounts(params) {
+  var auth = requireGmailAuth(params.gmail, params.password);
+
+  if (!params.sessionId) throw new Error('セッションIDが必要です');
+  if (!params.updates) throw new Error('更新データが必要です');
+
+  var updates;
+  try {
+    updates = JSON.parse(params.updates);
+  } catch (e) {
+    throw new Error('更新データの形式が不正です');
+  }
+  if (!Array.isArray(updates) || updates.length === 0) throw new Error('更新データが空です');
+
+  // セッション存在・完了待ちチェック
+  var sessions = getSheetData('T_棚卸セッション');
+  var session = sessions.find(function(s) { return s['セッションID'] === params.sessionId; });
+  if (!session) throw new Error('セッションが見つかりません');
+  if (session['ステータス'] !== '完了待ち') throw new Error('完了待ちのセッションのみ修正できます');
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error('他の処理が実行中です');
+
+  try {
+    var sheet = getSheet('T_棚卸明細');
+    var data = sheet.getDataRange().getValues();
+    var headers = data[0];
+    var sessionIdCol = headers.indexOf('セッションID');
+    var itemIdCol = headers.indexOf('品目ID');
+    var bookCol = headers.indexOf('帳簿在庫');
+    var countCol = headers.indexOf('実数');
+    var diffCol = headers.indexOf('差異');
+    var noteCol = headers.indexOf('備考');
+
+    var updatedCount = 0;
+
+    for (var u = 0; u < updates.length; u++) {
+      var upd = updates[u];
+      var newCount = Number(upd['実数']);
+      if (isNaN(newCount) || newCount < 0) continue;
+
+      for (var i = 1; i < data.length; i++) {
+        if (data[i][sessionIdCol] === params.sessionId && data[i][itemIdCol] === upd['品目ID']) {
+          var rowNum = i + 1;
+          var bookStock = data[i][bookCol];
+          var newDiff = newCount - bookStock;
+          sheet.getRange(rowNum, countCol + 1).setValue(newCount);
+          sheet.getRange(rowNum, diffCol + 1).setValue(newDiff);
+          // 未カウントだった場合は備考をクリア
+          if (data[i][noteCol] === '未カウント') {
+            sheet.getRange(rowNum, noteCol + 1).setValue('');
+          }
+          updatedCount++;
+          break;
+        }
+      }
+    }
+
+    return { updatedCount: updatedCount };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
 // ===== dispatchAction に追加する case 文 =====
 // 以下を既存の dispatchAction の switch 文内（default: の前）に追加:
 //
@@ -354,3 +421,5 @@ function approveStocktake(params) {
 //       return getStocktakeDetail(params);
 //     case 'approveStocktake':
 //       return approveStocktake(params);
+//     case 'updateStocktakeCounts':
+//       return updateStocktakeCounts(params);

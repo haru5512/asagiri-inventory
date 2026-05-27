@@ -695,13 +695,21 @@ const Inv = (() => {
 
   // --- Stocktake detail ---
   let stDetailSessionId = null;
+  let stDetailEditable = false;
+  let stDetailData = [];
 
   async function openStDetail(sessionId, status) {
     stDetailSessionId = sessionId;
+    stDetailEditable = status === '完了待ち';
+    stDetailData = [];
     document.getElementById('st-modal-title').textContent = '棚卸詳細 — ' + sessionId;
 
     const approveBtn = document.getElementById('btn-st-approve');
-    approveBtn.style.display = status === '完了待ち' ? 'inline-block' : 'none';
+    approveBtn.style.display = stDetailEditable ? 'inline-block' : 'none';
+    const saveBtn = document.getElementById('btn-st-save');
+    saveBtn.style.display = stDetailEditable ? 'inline-block' : 'none';
+    const saveMsg = document.getElementById('st-save-message');
+    saveMsg.style.display = 'none';
 
     const tbody = document.getElementById('st-detail-body');
     tbody.textContent = '';
@@ -721,27 +729,14 @@ const Inv = (() => {
       if (!json.success) throw new Error(json.error || '取得に失敗');
 
       tbody.textContent = '';
-      const details = json.data || [];
-      if (details.length === 0) {
+      stDetailData = json.data || [];
+      if (stDetailData.length === 0) {
         tbody.appendChild(el('tr', {},
           el('td', { colspan: '6', style: 'text-align:center;padding:20px;color:#666;' }, '明細データがありません')
         ));
         return;
       }
-      for (const d of details) {
-        const diff = d['差異'];
-        const isUncounted = d['備考'] === '未カウント';
-        const rowClass = isUncounted ? 'st-uncounted-row' : (diff !== 0 && diff !== '' ? 'st-diff-row' : '');
-        const tr = el('tr', { className: rowClass },
-          el('td', {}, d['品目ID']),
-          el('td', {}, d['品名']),
-          el('td', { style: 'text-align:right;' }, d['帳簿在庫'] != null ? String(d['帳簿在庫']) : ''),
-          el('td', { style: 'text-align:right;' }, d['実数'] != null && d['実数'] !== '' ? String(d['実数']) : '-'),
-          el('td', { style: 'text-align:right;' }, diff != null && diff !== '' ? String(diff) : '-'),
-          el('td', {}, d['備考'] || '')
-        );
-        tbody.appendChild(tr);
-      }
+      renderStDetailRows(tbody);
     } catch (err) {
       tbody.textContent = '';
       tbody.appendChild(el('tr', {},
@@ -750,9 +745,103 @@ const Inv = (() => {
     }
   }
 
+  function renderStDetailRows(tbody) {
+    tbody.textContent = '';
+    for (let i = 0; i < stDetailData.length; i++) {
+      const d = stDetailData[i];
+      const diff = d['差異'];
+      const isUncounted = d['備考'] === '未カウント';
+      const rowClass = isUncounted ? 'st-uncounted-row' : (diff !== 0 && diff !== '' ? 'st-diff-row' : '');
+      const tr = el('tr', { className: rowClass });
+      tr.appendChild(el('td', {}, d['品目ID']));
+      tr.appendChild(el('td', {}, d['品名']));
+      tr.appendChild(el('td', { style: 'text-align:right;' }, d['帳簿在庫'] != null ? String(d['帳簿在庫']) : ''));
+
+      // 実数: editable input for 完了待ち
+      const tdCount = document.createElement('td');
+      tdCount.style.textAlign = 'right';
+      if (stDetailEditable) {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.className = 'st-count-input';
+        input.value = d['実数'] != null && d['実数'] !== '' ? d['実数'] : '';
+        input.dataset.index = i;
+        input.addEventListener('input', function() {
+          const idx = parseInt(this.dataset.index);
+          const newVal = this.value !== '' ? parseInt(this.value) : '';
+          stDetailData[idx]['実数'] = newVal;
+          const book = stDetailData[idx]['帳簿在庫'] || 0;
+          stDetailData[idx]['差異'] = newVal !== '' ? newVal - book : '';
+          // Update diff cell
+          const diffTd = this.parentElement.nextElementSibling;
+          const newDiff = stDetailData[idx]['差異'];
+          diffTd.textContent = newDiff !== '' ? String(newDiff) : '-';
+          // Update row highlight
+          const row = this.closest('tr');
+          row.className = newDiff !== 0 && newDiff !== '' ? 'st-diff-row' : '';
+        });
+        tdCount.appendChild(input);
+      } else {
+        tdCount.textContent = d['実数'] != null && d['実数'] !== '' ? String(d['実数']) : '-';
+      }
+      tr.appendChild(tdCount);
+
+      tr.appendChild(el('td', { style: 'text-align:right;' }, diff != null && diff !== '' ? String(diff) : '-'));
+      tr.appendChild(el('td', {}, d['備考'] || ''));
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function saveStCounts() {
+    if (!stDetailSessionId || !stDetailEditable) return;
+
+    // Collect edited rows
+    const updates = [];
+    for (const d of stDetailData) {
+      if (d['実数'] !== '' && d['実数'] != null) {
+        updates.push({ '品目ID': d['品目ID'], '実数': d['実数'] });
+      }
+    }
+    if (updates.length === 0) {
+      alert('保存するデータがありません。');
+      return;
+    }
+
+    const btn = document.getElementById('btn-st-save');
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+    const saveMsg = document.getElementById('st-save-message');
+
+    try {
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const url = getApiUrl() + '?action=updateStocktakeCounts&gmail=' + encodeURIComponent(gmail)
+        + '&password=' + encodeURIComponent(password)
+        + '&sessionId=' + encodeURIComponent(stDetailSessionId)
+        + '&updates=' + encodeURIComponent(JSON.stringify(updates));
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '保存に失敗');
+
+      saveMsg.textContent = json.data.updatedCount + '件の実数を更新しました';
+      saveMsg.className = 'reg-message success';
+      saveMsg.style.display = 'block';
+      setTimeout(() => { saveMsg.style.display = 'none'; }, 3000);
+    } catch (err) {
+      saveMsg.textContent = 'エラー: ' + err.message;
+      saveMsg.className = 'reg-message error';
+      saveMsg.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '修正を保存';
+    }
+  }
+
   function closeStDetailModal() {
     document.getElementById('st-modal-overlay').style.display = 'none';
     stDetailSessionId = null;
+    stDetailData = [];
   }
 
   function closeStModal(event) {
@@ -798,5 +887,5 @@ const Inv = (() => {
     rawData = { stock: [], lots: [], history: [], stocktake: [] };
   }
 
-  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake };
+  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake, saveStCounts };
 })();

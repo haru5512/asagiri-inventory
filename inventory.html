@@ -184,8 +184,10 @@
             </table>
           </div>
         </div>
+        <div id="st-save-message" class="reg-message" style="display:none;margin:0 24px;"></div>
         <div class="modal-footer">
           <button class="btn-cancel" onclick="Inv.closeStDetailModal()">閉じる</button>
+          <button class="btn-fetch" id="btn-st-save" style="display:none;background:#1565c0;" onclick="Inv.saveStCounts()">修正を保存</button>
           <button class="btn-fetch" id="btn-st-approve" onclick="Inv.approveStocktake()">承認して在庫調整</button>
         </div>
       </div>

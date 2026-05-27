@@ -431,6 +431,22 @@ tbody tr:nth-child(even):hover { background: #f0f7f1; }
 }
 .st-card-diff .st-summary-value { color: #d32f2f; }
 
+/* Stocktake count input */
+.st-count-input {
+  width: 70px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: right;
+  outline: none;
+}
+
+.st-count-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(44, 122, 63, 0.15);
+}
+
 /* Stocktake status */
 .st-status {
   display: inline-block;
