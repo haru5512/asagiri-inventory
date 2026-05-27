@@ -659,10 +659,10 @@ const Inv = (() => {
       box.style.display = 'none';
       return;
     }
-    const pending = data.filter(r => r['\u30b9\u30c6\u30fc\u30bf\u30b9'] === '\u5b8c\u4e86\u5f85\u3061').length;
+
+    const pendingSessions = data.filter(r => r['\u30b9\u30c6\u30fc\u30bf\u30b9'] === '\u5b8c\u4e86\u5f85\u3061');
     const active = data.filter(r => r['\u30b9\u30c6\u30fc\u30bf\u30b9'] === '\u9032\u884c\u4e2d').length;
-    const confirmed = data.filter(r => r['\u30b9\u30c6\u30fc\u30bf\u30b9'] === '\u78ba\u5b9a').length;
-    const totalDiff = data.reduce((s, r) => s + (parseInt(r['\u5dee\u7570\u3042\u308a\u6570']) || 0), 0);
+    const pendingDiff = pendingSessions.reduce((s, r) => s + (parseInt(r['\u5dee\u7570\u3042\u308a\u6570']) || 0), 0);
 
     // Find latest session date
     let latest = '';
@@ -682,10 +682,14 @@ const Inv = (() => {
       ));
     }
 
-    if (pending > 0) addCard('\u627f\u8a8d\u5f85\u3061', pending + '\u4ef6', 'st-card-pending');
+    if (pendingSessions.length > 0) {
+      addCard('\u627f\u8a8d\u5f85\u3061', pendingSessions.length + '\u4ef6', 'st-card-pending');
+      if (pendingDiff > 0) addCard('\u5dee\u7570\u3042\u308a', pendingDiff + '\u54c1\u76ee', 'st-card-diff');
+    }
     if (active > 0) addCard('\u9032\u884c\u4e2d', active + '\u4ef6', 'st-card-active');
-    addCard('\u78ba\u5b9a\u6e08\u307f', confirmed + '\u4ef6', 'st-card-confirmed');
-    if (totalDiff > 0) addCard('\u5dee\u7570\u3042\u308a\u5408\u8a08', totalDiff + '\u54c1\u76ee', 'st-card-diff');
+    if (pendingSessions.length === 0 && active === 0) {
+      addCard('\u5bfe\u5fdc\u5f85\u3061\u306a\u3057', '\u2713', 'st-card-confirmed');
+    }
     if (latest) addCard('\u6700\u7d42\u68da\u5378', latest, '');
   }
 
