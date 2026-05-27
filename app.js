@@ -10,6 +10,7 @@ const App = (() => {
   let stSessionId = null;   // 棚卸セッションID
   let stCountedNum = 0;     // カウント済み品目数
   let stCurrentItem = null;  // 棚卸中の品目データ
+  let stTotalItems = 0;      // 棚卸対象の全品目数
 
   const OP_LABELS = {
     stockin: '入庫',
@@ -827,9 +828,50 @@ const App = (() => {
   }
 
   // --- 棚卸フロー ---
-  function goToStocktakeStart() {
+  async function goToStocktakeStart() {
     if (!requireGmail()) return;
+    // 進行中セッションの検索
+    const resumeArea = document.getElementById('st-resume-area');
+    const newArea = document.getElementById('st-new-area');
+    resumeArea.style.display = 'none';
+    newArea.style.display = 'block';
     showScreen('screen-st-start');
+
+    if (!isApiConfigured()) return;
+    try {
+      const url = getApiUrl() + '?action=getMyActiveSession&gmail=' + encodeURIComponent(getGmail()) + '&password=' + encodeURIComponent(getPassword());
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (json.success && json.data) {
+        const s = json.data;
+        const infoEl = document.getElementById('st-resume-info');
+        infoEl.textContent = '';
+        infoEl.appendChild(el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, 'セッションID'),
+          el('span', { className: 'result-value' }, s.sessionId)
+        ));
+        infoEl.appendChild(el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, 'カウント済み'),
+          el('span', { className: 'result-value' }, s.countedNum + '/' + s.totalItems + '品')
+        ));
+        resumeArea.style.display = 'block';
+        resumeArea.dataset.sessionId = s.sessionId;
+        resumeArea.dataset.countedNum = s.countedNum;
+        resumeArea.dataset.totalItems = s.totalItems;
+        newArea.style.display = 'none';
+      }
+    } catch (e) {
+      // 検索失敗しても新規開始は可能
+      console.error('Active session check failed:', e);
+    }
+  }
+
+  function resumeStocktake() {
+    const resumeArea = document.getElementById('st-resume-area');
+    stSessionId = resumeArea.dataset.sessionId;
+    stCountedNum = parseInt(resumeArea.dataset.countedNum, 10) || 0;
+    stTotalItems = parseInt(resumeArea.dataset.totalItems, 10) || 0;
+    goToStScan();
   }
 
   async function startStocktake() {
@@ -847,6 +889,7 @@ const App = (() => {
       if (!json.success) throw new Error(json.error || '棚卸開始に失敗しました');
       stSessionId = json.data.sessionId;
       stCountedNum = 0;
+      stTotalItems = json.data.totalItems || 0;
       stCurrentItem = null;
       goToStScan();
     } catch (err) {
@@ -858,7 +901,9 @@ const App = (() => {
   }
 
   function goToStScan() {
-    document.getElementById('st-scan-title').textContent = '棚卸中 (' + stCountedNum + '品カウント済)';
+    document.getElementById('st-scan-title').textContent = stTotalItems > 0
+      ? '棚卸中 (' + stCountedNum + '/' + stTotalItems + '品)'
+      : '棚卸中 (' + stCountedNum + '品カウント済)';
     document.getElementById('st-manual-input').style.display = 'none';
     showScreen('screen-st-scan');
     startStScan();
@@ -1281,5 +1326,6 @@ const App = (() => {
     sendStocktakeCount,
     confirmStocktakeEnd,
     endStocktake,
+    resumeStocktake,
   };
 })();

@@ -258,13 +258,27 @@
       <h1>棚卸開始</h1>
     </div>
     <div class="content">
-      <div class="result-card">
-        <div class="result-header found">棚卸を開始しますか？</div>
-        <p class="result-message">バーコードスキャンで1品ずつカウントします。<br>終了時に未カウント品目の確認があります。</p>
+      <div id="st-resume-area" style="display:none;">
+        <div class="result-card">
+          <div class="result-header found">進行中のセッションがあります</div>
+          <div id="st-resume-info"></div>
+        </div>
+        <button class="btn btn-primary" id="btn-st-resume" onclick="App.resumeStocktake()">
+          再開する
+        </button>
+        <button class="btn btn-secondary" onclick="App.startStocktake()">
+          新規で開始する
+        </button>
       </div>
-      <button class="btn btn-primary" id="btn-st-start" onclick="App.startStocktake()">
-        棚卸を開始
-      </button>
+      <div id="st-new-area">
+        <div class="result-card">
+          <div class="result-header found">棚卸を開始しますか？</div>
+          <p class="result-message">バーコードスキャンで1品ずつカウントします。<br>終了時に未カウント品目の確認があります。</p>
+        </div>
+        <button class="btn btn-primary" id="btn-st-start" onclick="App.startStocktake()">
+          棚卸を開始
+        </button>
+      </div>
       <button class="btn btn-secondary" onclick="App.goToTop()">
         キャンセル
       </button>
