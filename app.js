@@ -1136,6 +1136,40 @@ const App = (() => {
           )
         )
       );
+      // 差異詳細
+      const diffContainer = document.getElementById('st-diff-detail');
+      diffContainer.textContent = '';
+      const diffList = d.details || [];
+      if (diffList.length > 0) {
+        diffContainer.style.display = 'block';
+        const table = el('table', { className: 'diff-table' },
+          el('thead', {},
+            el('tr', {},
+              el('th', {}, '品名'),
+              el('th', { style: 'text-align:right;' }, '帳簿'),
+              el('th', { style: 'text-align:right;' }, '実数'),
+              el('th', { style: 'text-align:right;' }, '差異')
+            )
+          )
+        );
+        const tbody = document.createElement('tbody');
+        for (const item of diffList) {
+          const diff = Number(item['差異']);
+          tbody.appendChild(el('tr', {},
+            el('td', {}, item['品名']),
+            el('td', { style: 'text-align:right;' }, String(item['帳簿在庫'])),
+            el('td', { style: 'text-align:right;' }, String(item['実数'])),
+            el('td', { style: 'text-align:right;color:' + (diff > 0 ? '#2e7d32' : '#d32f2f') }, (diff > 0 ? '+' : '') + diff)
+          ));
+        }
+        table.appendChild(tbody);
+        diffContainer.appendChild(el('div', { className: 'result-card' },
+          el('div', { className: 'result-header' }, '差異あり品目'),
+          table
+        ));
+      } else {
+        diffContainer.style.display = 'none';
+      }
       showScreen('screen-st-summary');
     } catch (err) {
       alert('エラー: ' + err.message);

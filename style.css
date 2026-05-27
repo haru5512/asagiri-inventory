@@ -448,3 +448,24 @@ html, body {
   color: #888;
   font-size: 12px;
 }
+
+/* Diff table in summary */
+.diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.diff-table th {
+  background: #f5f5f5;
+  padding: 6px 8px;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 2px solid #ddd;
+}
+
+.diff-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #eee;
+}
