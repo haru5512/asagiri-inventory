@@ -43,6 +43,10 @@
         <button class="btn btn-secondary" onclick="App.startOp('move')">
           <span>&#x1F504;</span> 移動
         </button>
+        <div class="menu-section-label">棚卸</div>
+        <button class="btn btn-primary" onclick="App.goToStocktakeStart()">
+          <span>&#x1F4CB;</span> 棚卸開始
+        </button>
         <div class="menu-divider"></div>
         <button class="btn btn-outline" onclick="App.goToSettings()">
           <span>&#x2699;</span> 設定
@@ -127,6 +131,10 @@
       <div class="setting-item">
         <div class="setting-label">担当者ログイン</div>
         <div class="setting-value" id="settings-gmail"></div>
+        <div id="settings-user-info" style="display:none;margin-top:4px;">
+          <span id="settings-user-name" style="font-size:14px;font-weight:600;"></span>
+          <span id="settings-user-role" style="font-size:12px;color:var(--text-light);margin-left:8px;"></span>
+        </div>
         <div class="form-group" style="margin-top:12px;">
           <label for="input-gmail">メールアドレス</label>
           <input type="email" id="input-gmail" placeholder="example@gmail.com" autocomplete="off">
@@ -148,7 +156,7 @@
         <button class="btn btn-secondary" id="btn-reload-locations" onclick="App.reloadLocations()" style="margin-top:8px;">
           場所データを再取得
         </button>
-        <p class="setting-hint">自動キャッシュ更新は今後のバージョンで実装予定</p>
+        <div id="settings-locations-timestamp" class="setting-hint"></div>
       </div>
       <div class="setting-item">
         <div class="setting-label">API接続先</div>
@@ -239,6 +247,105 @@
       <div id="op-input-form"></div>
       <button class="btn btn-primary" id="btn-op-confirm" onclick="App.goToOpConfirm()">
         確認画面へ
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen: Stocktake Start -->
+  <div id="screen-st-start" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="App.goToTop()">&larr;</button>
+      <h1>棚卸開始</h1>
+    </div>
+    <div class="content">
+      <div class="result-card">
+        <div class="result-header found">棚卸を開始しますか？</div>
+        <p class="result-message">バーコードスキャンで1品ずつカウントします。<br>終了時に未カウント品目の確認があります。</p>
+      </div>
+      <button class="btn btn-primary" id="btn-st-start" onclick="App.startStocktake()">
+        棚卸を開始
+      </button>
+      <button class="btn btn-secondary" onclick="App.goToTop()">
+        キャンセル
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen: Stocktake Scan -->
+  <div id="screen-st-scan" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="App.confirmStocktakeEnd()">&larr;</button>
+      <h1 id="st-scan-title">棚卸中</h1>
+    </div>
+    <div class="content">
+      <div class="video-container">
+        <video id="st-scan-video" playsinline></video>
+      </div>
+      <p class="scan-guide">バーコードをカメラに映してください</p>
+      <button class="btn btn-secondary" onclick="App.goToStManual()">
+        <span>&#x2328;</span> 手入力に切替
+      </button>
+      <div id="st-manual-input" style="display:none;">
+        <div class="form-group" style="margin-top:12px;">
+          <label for="input-st-barcode">バーコード or 品目ID</label>
+          <input type="text" id="input-st-barcode" placeholder="例: 4901234567890 or IT001" autocomplete="off">
+        </div>
+        <button class="btn btn-primary" onclick="App.searchStManual()">
+          検索
+        </button>
+      </div>
+      <button class="btn btn-outline" onclick="App.confirmStocktakeEnd()" style="margin-top:16px;">
+        棚卸を終了する
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen: Stocktake Count -->
+  <div id="screen-st-count" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="App.goToStScan()">&larr;</button>
+      <h1>実数入力</h1>
+    </div>
+    <div class="content">
+      <div id="st-item-info"></div>
+      <div class="form-group">
+        <label for="input-st-count">実数</label>
+        <input type="number" id="input-st-count" min="0" placeholder="実際の個数を入力" inputmode="numeric">
+      </div>
+      <button class="btn btn-primary" id="btn-st-send" onclick="App.sendStocktakeCount()">
+        送信
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen: Stocktake Summary -->
+  <div id="screen-st-summary" class="screen">
+    <div class="header">
+      <h1>棚卸サマリー</h1>
+    </div>
+    <div class="content">
+      <div id="st-summary-content"></div>
+      <button class="btn btn-primary" id="btn-st-end" onclick="App.endStocktake()">
+        棚卸を終了
+      </button>
+      <button class="btn btn-secondary" onclick="App.goToStScan()">
+        スキャンに戻る
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen: Stocktake Done -->
+  <div id="screen-st-done" class="screen">
+    <div class="header">
+      <h1>棚卸完了</h1>
+    </div>
+    <div class="content">
+      <div class="result-card">
+        <div class="result-header found">棚卸セッション完了</div>
+        <p class="result-message">管理者の承認をお待ちください。<br>承認後、帳簿在庫が調整されます。</p>
+      </div>
+      <button class="btn btn-primary" onclick="App.goToTop()">
+        トップに戻る
       </button>
     </div>
   </div>
