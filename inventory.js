@@ -2,7 +2,7 @@
 
 const Inv = (() => {
   let currentTab = 'stock';
-  let rawData = { stock: [], lots: [], history: [] };
+  let rawData = { stock: [], lots: [], history: [], stocktake: [] };
   let sortKey = '';
   let sortAsc = true;
 
@@ -72,6 +72,20 @@ const Inv = (() => {
         { key: 'Gmail', label: '担当者' },
       ],
       filters: ['category', 'itemName', 'period', 'opType'],
+    },
+    stocktake: {
+      api: 'getStocktakeSessions',
+      columns: [
+        { key: 'セッションID', label: 'セッションID' },
+        { key: '開始日時', label: '開始日時' },
+        { key: '担当者名', label: '担当者' },
+        { key: 'ステータス', label: 'ステータス' },
+        { key: 'カウント数', label: 'カウント', align: 'right' },
+        { key: '差異あり数', label: '差異あり', align: 'right' },
+        { key: '未カウント数', label: '未カウント', align: 'right' },
+        { key: '操作', label: '' },
+      ],
+      filters: [],
     },
   };
 
@@ -267,7 +281,27 @@ const Inv = (() => {
         const tr = document.createElement('tr');
         for (const col of config.columns) {
           const td = document.createElement('td');
-          td.textContent = row[col.key] != null ? String(row[col.key]) : '';
+          if (currentTab === 'stocktake' && col.key === 'ステータス') {
+            const status = row[col.key] || '';
+            const span = document.createElement('span');
+            span.textContent = status;
+            span.className = 'st-status '
+              + (status === '完了待ち' ? 'st-status-pending' : '')
+              + (status === '確定' ? 'st-status-confirmed' : '')
+              + (status === '進行中' ? 'st-status-active' : '');
+            td.appendChild(span);
+          } else if (currentTab === 'stocktake' && col.key === '操作') {
+            if (row['ステータス'] === '完了待ち' || row['ステータス'] === '確定') {
+              const btn = document.createElement('button');
+              btn.textContent = '詳細';
+              btn.className = 'btn-fetch';
+              btn.style.padding = '4px 12px';
+              btn.addEventListener('click', () => openStDetail(row['セッションID'], row['ステータス']));
+              td.appendChild(btn);
+            }
+          } else {
+            td.textContent = row[col.key] != null ? String(row[col.key]) : '';
+          }
           if (col.align) td.style.textAlign = col.align;
           tr.appendChild(td);
         }
@@ -538,6 +572,101 @@ const Inv = (() => {
   // --- Start ---
   init();
 
+  // --- Stocktake ---
+  let stDetailSessionId = null;
+
+  async function openStDetail(sessionId, status) {
+    stDetailSessionId = sessionId;
+    document.getElementById('st-modal-title').textContent = '棚卸詳細 — ' + sessionId;
+
+    const approveBtn = document.getElementById('btn-st-approve');
+    approveBtn.style.display = status === '完了待ち' ? 'inline-block' : 'none';
+
+    const tbody = document.getElementById('st-detail-body');
+    tbody.textContent = '';
+    tbody.appendChild(el('tr', {},
+      el('td', { colspan: '6', style: 'text-align:center;padding:20px;color:#666;' }, '読み込み中...')
+    ));
+    document.getElementById('st-modal-overlay').style.display = 'flex';
+
+    try {
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const url = getApiUrl() + '?action=getStocktakeDetail&gmail=' + encodeURIComponent(gmail)
+        + '&password=' + encodeURIComponent(password)
+        + '&sessionId=' + encodeURIComponent(sessionId);
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '取得に失敗');
+
+      tbody.textContent = '';
+      const details = json.data || [];
+      if (details.length === 0) {
+        tbody.appendChild(el('tr', {},
+          el('td', { colspan: '6', style: 'text-align:center;padding:20px;color:#666;' }, '明細データがありません')
+        ));
+        return;
+      }
+      for (const d of details) {
+        const diff = d['差異'];
+        const isUncounted = d['備考'] === '未カウント';
+        const rowClass = isUncounted ? 'st-uncounted-row' : (diff !== 0 && diff !== '' ? 'st-diff-row' : '');
+        const tr = el('tr', { className: rowClass },
+          el('td', {}, d['品目ID']),
+          el('td', {}, d['品名']),
+          el('td', { style: 'text-align:right;' }, d['帳簿在庫'] != null ? String(d['帳簿在庫']) : ''),
+          el('td', { style: 'text-align:right;' }, d['実数'] != null && d['実数'] !== '' ? String(d['実数']) : '-'),
+          el('td', { style: 'text-align:right;' }, diff != null && diff !== '' ? String(diff) : '-'),
+          el('td', {}, d['備考'] || '')
+        );
+        tbody.appendChild(tr);
+      }
+    } catch (err) {
+      tbody.textContent = '';
+      tbody.appendChild(el('tr', {},
+        el('td', { colspan: '6', style: 'text-align:center;padding:20px;color:#d32f2f;' }, 'エラー: ' + err.message)
+      ));
+    }
+  }
+
+  function closeStDetailModal() {
+    document.getElementById('st-modal-overlay').style.display = 'none';
+    stDetailSessionId = null;
+  }
+
+  function closeStModal(event) {
+    if (event.target === event.currentTarget) closeStDetailModal();
+  }
+
+  async function approveStocktake() {
+    if (!stDetailSessionId) return;
+    if (!confirm('この棚卸セッションを承認し、在庫を調整しますか？\nこの操作は元に戻せません。')) return;
+
+    const btn = document.getElementById('btn-st-approve');
+    btn.disabled = true;
+    btn.textContent = '処理中...';
+
+    try {
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const url = getApiUrl() + '?action=approveStocktake&gmail=' + encodeURIComponent(gmail)
+        + '&password=' + encodeURIComponent(password)
+        + '&sessionId=' + encodeURIComponent(stDetailSessionId);
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '承認に失敗');
+
+      alert('承認完了: ' + json.data.adjustedCount + '件の在庫調整を実行しました。');
+      closeStDetailModal();
+      fetchData();
+    } catch (err) {
+      alert('エラー: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '承認して在庫調整';
+    }
+  }
+
   function logout() {
     localStorage.removeItem('USER_GMAIL');
     localStorage.removeItem('USER_PASSWORD');
@@ -545,8 +674,8 @@ const Inv = (() => {
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('login-email').value = '';
     document.getElementById('login-password').value = '';
-    rawData = { stock: [], lots: [], history: [] };
+    rawData = { stock: [], lots: [], history: [], stocktake: [] };
   }
 
-  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem };
+  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake };
 })();
