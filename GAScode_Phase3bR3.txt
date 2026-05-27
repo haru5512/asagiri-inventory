@@ -2819,6 +2819,8 @@ function dispatchAction(action, params) {
       return updateStocktakeCounts(params);
     case 'getMyActiveSession':
       return getMyActiveSession(params);
+    case 'getUncountedItems':
+      return getUncountedItems(params);
     default:
       throw new Error(`未対応のaction: ${action}`);
   }
@@ -2927,7 +2929,13 @@ function startStocktake(params) {
     // 列順: セッションID / 開始日時 / 担当者ID / ステータス / 終了日時 / 承認者ID / 承認日時
     sheet.appendRow([sessionId, now, auth.userId, '進行中', '', '', '']);
 
-    return { sessionId: sessionId, startTime: now };
+    // 帳簿在庫>0の全品目数
+    var items = getItems();
+    var totalItems = items.filter(function(item) {
+      return getCurrentStockByItemId(item['品目ID']) > 0;
+    }).length;
+
+    return { sessionId: sessionId, startTime: now, totalItems: totalItems };
   } finally {
     lock.releaseLock();
   }
@@ -3024,7 +3032,32 @@ function getStocktakeSummary(params) {
     return getCurrentStockByItemId(item['品目ID']) > 0 && !countedItemIds[item['品目ID']];
   }).length;
 
-  return { counted: counted, withDifference: withDifference, uncounted: uncounted };
+  // 差異あり品目の詳細リスト
+  var diffDetails = details
+    .filter(function(d) { return d['備考'] !== '未カウント' && Number(d['差異']) !== 0; })
+    .map(function(d) {
+      var item = getItemById(d['品目ID']);
+      return {
+        '品目ID': d['品目ID'],
+        '品名': item ? item['品名'] : '',
+        '帳簿在庫': d['帳簿在庫'],
+        '実数': d['実数'],
+        '差異': d['差異']
+      };
+    });
+
+  // 全品目数
+  var totalItems = items.filter(function(item) {
+    return getCurrentStockByItemId(item['品目ID']) > 0;
+  }).length;
+
+  return {
+    counted: counted,
+    withDifference: withDifference,
+    uncounted: uncounted,
+    totalItems: totalItems,
+    details: diffDetails
+  };
 }
 
 
@@ -3284,6 +3317,29 @@ function updateStocktakeCounts(params) {
     lock.releaseLock();
   }
 }
+
+// ===== 未カウント品目一覧を取得 =====
+
+function getUncountedItems(params) {
+  requireGmailAuth(params.gmail, params.password);
+
+  if (!params.sessionId) throw new Error('セッションIDが必要です');
+
+  var details = getSheetData('T_棚卸明細')
+    .filter(function(d) { return d['セッションID'] === params.sessionId; });
+  var countedItemIds = {};
+  details.forEach(function(d) { countedItemIds[d['品目ID']] = true; });
+
+  var items = getItems();
+  var uncounted = items.filter(function(item) {
+    return getCurrentStockByItemId(item['品目ID']) > 0 && !countedItemIds[item['品目ID']];
+  }).map(function(item) {
+    return { '品目ID': item['品目ID'], '品名': item['品名'], '大カテゴリ': item['大カテゴリ'] };
+  });
+
+  return uncounted;
+}
+
 
 // ===== 自分の進行中セッションを取得 =====
 
