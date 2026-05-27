@@ -23,6 +23,21 @@ const Inv = (() => {
     return node;
   }
 
+  // --- Util ---
+  function formatDateTime(s) {
+    if (!s) return '';
+    try {
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return s;
+      const y = d.getFullYear();
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const h = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      return y + '/' + mo + '/' + day + ' ' + h + ':' + mi;
+    } catch (e) { return s; }
+  }
+
   // --- API ---
   function getApiUrl() {
     return localStorage.getItem('WEB_APP_URL') || CONFIG.WEB_APP_URL;
@@ -193,6 +208,7 @@ const Inv = (() => {
     });
     renderFilters();
     renderTableHead();
+    renderStSummary();
     renderTableBody();
   }
 
@@ -300,7 +316,11 @@ const Inv = (() => {
               td.appendChild(btn);
             }
           } else {
-            td.textContent = row[col.key] != null ? String(row[col.key]) : '';
+            let val = row[col.key] != null ? String(row[col.key]) : '';
+            if (val && (col.key === '開始日時' || col.key === '日時')) {
+              val = formatDateTime(val);
+            }
+            td.textContent = val;
           }
           if (col.align) td.style.textAlign = col.align;
           tr.appendChild(td);
@@ -420,6 +440,7 @@ const Inv = (() => {
 
       rawData[currentTab] = json.data || [];
       populateFilterOptions(rawData[currentTab]);
+      renderStSummary();
       renderTableBody();
     } catch (err) {
       alert('通信エラー: ' + err.message);
@@ -572,7 +593,50 @@ const Inv = (() => {
   // --- Start ---
   init();
 
-  // --- Stocktake ---
+  // --- Stocktake summary ---
+  function renderStSummary() {
+    const box = document.getElementById('st-summary');
+    if (!box) return;
+    if (currentTab !== 'stocktake') {
+      box.style.display = 'none';
+      return;
+    }
+    const data = rawData.stocktake;
+    if (data.length === 0) {
+      box.style.display = 'none';
+      return;
+    }
+    const pending = data.filter(r => r['\u30b9\u30c6\u30fc\u30bf\u30b9'] === '\u5b8c\u4e86\u5f85\u3061').length;
+    const active = data.filter(r => r['\u30b9\u30c6\u30fc\u30bf\u30b9'] === '\u9032\u884c\u4e2d').length;
+    const confirmed = data.filter(r => r['\u30b9\u30c6\u30fc\u30bf\u30b9'] === '\u78ba\u5b9a').length;
+    const totalDiff = data.reduce((s, r) => s + (parseInt(r['\u5dee\u7570\u3042\u308a\u6570']) || 0), 0);
+
+    // Find latest session date
+    let latest = '';
+    for (const r of data) {
+      const d = r['\u958b\u59cb\u65e5\u6642'] || '';
+      if (d > latest) latest = d;
+    }
+    if (latest.length > 10) latest = latest.substring(0, 10);
+
+    box.style.display = 'flex';
+    box.textContent = '';
+
+    function addCard(label, value, cls) {
+      box.appendChild(el('div', { className: 'st-summary-card' + (cls ? ' ' + cls : '') },
+        el('div', { className: 'st-summary-value' }, String(value)),
+        el('div', { className: 'st-summary-label' }, label)
+      ));
+    }
+
+    if (pending > 0) addCard('\u627f\u8a8d\u5f85\u3061', pending + '\u4ef6', 'st-card-pending');
+    if (active > 0) addCard('\u9032\u884c\u4e2d', active + '\u4ef6', 'st-card-active');
+    addCard('\u78ba\u5b9a\u6e08\u307f', confirmed + '\u4ef6', 'st-card-confirmed');
+    if (totalDiff > 0) addCard('\u5dee\u7570\u3042\u308a\u5408\u8a08', totalDiff + '\u54c1\u76ee', 'st-card-diff');
+    if (latest) addCard('\u6700\u7d42\u68da\u5378', latest, '');
+  }
+
+  // --- Stocktake detail ---
   let stDetailSessionId = null;
 
   async function openStDetail(sessionId, status) {
