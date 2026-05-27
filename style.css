@@ -390,3 +390,29 @@ html, body {
   color: var(--text-light);
   margin-top: 8px;
 }
+
+/* Stocktake badge */
+.st-badge {
+  display: inline-block;
+  background: var(--primary);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-left: 8px;
+}
+
+.st-diff-positive {
+  color: #1565c0;
+  font-weight: 600;
+}
+
+.st-diff-negative {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.st-diff-zero {
+  color: var(--primary);
+}
