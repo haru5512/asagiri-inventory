@@ -165,6 +165,28 @@ const App = (() => {
     }
     localStorage.setItem('USER_GMAIL', gmail);
     localStorage.setItem('USER_PASSWORD', password);
+
+    // 認証APIで担当者情報を取得
+    const url = getApiUrl();
+    if (url) {
+      try {
+        const res = await fetch(url + '?action=authenticateByGmail&gmail=' + encodeURIComponent(gmail) + '&password=' + encodeURIComponent(password));
+        const json = await res.json();
+        if (json.success && json.user) {
+          localStorage.setItem('USER_NAME', json.user.name || '');
+          localStorage.setItem('USER_ROLE', json.user.role || '');
+        } else {
+          alert('認証に失敗しました: ' + (json.error || 'メールアドレスまたはパスワードが正しくありません'));
+          updateGmailStatus();
+          return;
+        }
+      } catch (e) {
+        alert('認証APIへの接続に失敗しました。Web App URLを確認してください。');
+        updateGmailStatus();
+        return;
+      }
+    }
+
     updateGmailStatus();
     alert('ログイン情報を保存しました');
   }
