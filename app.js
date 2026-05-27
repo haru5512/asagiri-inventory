@@ -1092,6 +1092,11 @@ const App = (() => {
     }
   }
 
+  function pauseStocktake() {
+    stopScan();
+    showScreen('screen-top');
+  }
+
   function confirmStocktakeEnd() {
     if (!stSessionId) {
       goToTop();
@@ -1408,6 +1413,7 @@ const App = (() => {
     searchStManual,
     sendStocktakeCount,
     confirmStocktakeEnd,
+    pauseStocktake,
     endStocktake,
     resumeStocktake,
     showUncountedItems,
