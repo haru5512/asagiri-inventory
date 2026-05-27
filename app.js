@@ -866,6 +866,55 @@ const App = (() => {
     }
   }
 
+  async function showUncountedItems() {
+    if (!stSessionId) return;
+    stopScan();
+    showScreen('screen-loading');
+    try {
+      const params = new URLSearchParams({
+        action: 'getUncountedItems',
+        gmail: getGmail(),
+        password: getPassword(),
+        sessionId: stSessionId,
+      });
+      const url = getApiUrl() + '?' + params.toString();
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '取得に失敗');
+
+      const list = json.data || [];
+      const container = document.getElementById('st-uncounted-list');
+      container.textContent = '';
+
+      if (list.length === 0) {
+        clearAndAppend(container,
+          el('div', { className: 'result-card' },
+            el('div', { className: 'result-header found' }, '全品目カウント済みです')
+          )
+        );
+      } else {
+        const header = el('div', { className: 'result-card' },
+          el('div', { className: 'result-header' }, '未カウント: ' + list.length + '品')
+        );
+        container.appendChild(header);
+
+        const ul = el('ul', { className: 'uncounted-list' });
+        for (const item of list) {
+          ul.appendChild(el('li', { className: 'uncounted-item' },
+            el('span', { className: 'uncounted-id' }, item['品目ID']),
+            el('span', { className: 'uncounted-name' }, item['品名']),
+            el('span', { className: 'uncounted-cat' }, item['大カテゴリ'] || '')
+          ));
+        }
+        container.appendChild(ul);
+      }
+      showScreen('screen-st-uncounted');
+    } catch (err) {
+      alert('通信エラー: ' + err.message);
+      goToStScan();
+    }
+  }
+
   function resumeStocktake() {
     const resumeArea = document.getElementById('st-resume-area');
     stSessionId = resumeArea.dataset.sessionId;
@@ -1327,5 +1376,6 @@ const App = (() => {
     confirmStocktakeEnd,
     endStocktake,
     resumeStocktake,
+    showUncountedItems,
   };
 })();

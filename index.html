@@ -308,8 +308,25 @@
           検索
         </button>
       </div>
+      <button class="btn btn-secondary" onclick="App.showUncountedItems()" style="margin-top:8px;">
+        未カウント品を確認
+      </button>
       <button class="btn btn-outline" onclick="App.confirmStocktakeEnd()" style="margin-top:16px;">
         棚卸を終了する
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen: Uncounted Items -->
+  <div id="screen-st-uncounted" class="screen">
+    <div class="header">
+      <button class="back-btn" onclick="App.goToStScan()">&larr;</button>
+      <h1>未カウント品</h1>
+    </div>
+    <div class="content">
+      <div id="st-uncounted-list"></div>
+      <button class="btn btn-primary" onclick="App.goToStScan()">
+        スキャンに戻る
       </button>
     </div>
   </div>

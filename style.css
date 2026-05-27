@@ -416,3 +416,35 @@ html, body {
 .st-diff-zero {
   color: var(--primary);
 }
+
+/* Uncounted items list */
+.uncounted-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.uncounted-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+}
+
+.uncounted-id {
+  color: #888;
+  font-size: 12px;
+  min-width: 60px;
+}
+
+.uncounted-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.uncounted-cat {
+  color: #888;
+  font-size: 12px;
+}
