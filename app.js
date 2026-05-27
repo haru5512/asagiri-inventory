@@ -7,6 +7,9 @@ const App = (() => {
   let currentOp = null;    // 'stockin' | 'stockout' | 'dispose' | 'move'
   let currentItem = null;
   let currentLocations = { from: '', to: '' };
+  let stSessionId = null;   // 棚卸セッションID
+  let stCountedNum = 0;     // カウント済み品目数
+  let stCurrentItem = null;  // 棚卸中の品目データ
 
   const OP_LABELS = {
     stockin: '入庫',
@@ -73,6 +76,8 @@ const App = (() => {
         navigator.serviceWorker.register('./sw.js');
       });
     }
+
+    autoRefreshLocations();
   }
 
   function updateApiStatus() {
@@ -125,15 +130,29 @@ const App = (() => {
       gmailEl.className = 'setting-value connected';
       if (gmailInput) gmailInput.value = getGmail();
       if (pwInput) pwInput.value = '';
+      const userName = localStorage.getItem('USER_NAME') || '';
+      const userRole = localStorage.getItem('USER_ROLE') || '';
+      const infoEl = document.getElementById('settings-user-info');
+      if (infoEl) {
+        if (userName) {
+          document.getElementById('settings-user-name').textContent = userName;
+          document.getElementById('settings-user-role').textContent = userRole;
+          infoEl.style.display = 'block';
+        } else {
+          infoEl.style.display = 'none';
+        }
+      }
     } else {
       gmailEl.textContent = '未ログイン';
       gmailEl.className = 'setting-value not-connected';
       if (gmailInput) gmailInput.value = '';
       if (pwInput) pwInput.value = '';
+      const infoEl2 = document.getElementById('settings-user-info');
+      if (infoEl2) infoEl2.style.display = 'none';
     }
   }
 
-  function saveLogin() {
+  async function saveLogin() {
     const gmail = document.getElementById('input-gmail').value.trim();
     const password = document.getElementById('input-password').value;
     if (!gmail || !gmail.includes('@')) {
@@ -153,6 +172,8 @@ const App = (() => {
   function logout() {
     localStorage.removeItem('USER_GMAIL');
     localStorage.removeItem('USER_PASSWORD');
+    localStorage.removeItem('USER_NAME');
+    localStorage.removeItem('USER_ROLE');
     updateGmailStatus();
     alert('ログアウトしました');
   }
@@ -180,6 +201,7 @@ const App = (() => {
       const json = await res.json();
       if (json.success && json.data) {
         localStorage.setItem('CACHED_LOCATIONS', JSON.stringify(json.data));
+        localStorage.setItem('CACHED_LOCATIONS_TIMESTAMP', String(Date.now()));
         return json.data;
       }
     } catch (err) {
@@ -199,6 +221,26 @@ const App = (() => {
     alert(count > 0 ? count + '件の場所データを取得しました' : '場所データの取得に失敗しました');
   }
 
+  async function autoRefreshLocations() {
+    if (!isApiConfigured()) return;
+    const ts = localStorage.getItem('CACHED_LOCATIONS_TIMESTAMP');
+    if (ts) {
+      const elapsed = Date.now() - Number(ts);
+      if (elapsed < 24 * 60 * 60 * 1000) return;
+    }
+    try {
+      const url = getApiUrl() + '?action=getLocations';
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (json.success && json.data) {
+        localStorage.setItem('CACHED_LOCATIONS', JSON.stringify(json.data));
+        localStorage.setItem('CACHED_LOCATIONS_TIMESTAMP', String(Date.now()));
+      }
+    } catch (err) {
+      console.log('Auto-refresh locations skipped:', err.message);
+    }
+  }
+
   // --- 画面遷移 ---
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -210,6 +252,9 @@ const App = (() => {
     currentOp = null;
     currentItem = null;
     currentLocations = { from: '', to: '' };
+    stSessionId = null;
+    stCountedNum = 0;
+    stCurrentItem = null;
     showScreen('screen-top');
   }
 
@@ -747,6 +792,267 @@ const App = (() => {
     const locations = getCachedLocations();
     const locEl = document.getElementById('settings-locations');
     if (locEl) locEl.textContent = locations.length > 0 ? locations.length + '件キャッシュ済み' : '未取得';
+    const tsEl = document.getElementById('settings-locations-timestamp');
+    if (tsEl) {
+      const ts = localStorage.getItem('CACHED_LOCATIONS_TIMESTAMP');
+      if (ts) {
+        const d = new Date(Number(ts));
+        tsEl.textContent = '最終取得: ' + d.toLocaleString('ja-JP');
+      } else {
+        tsEl.textContent = '';
+      }
+    }
+  }
+
+  // --- 棚卸フロー ---
+  function goToStocktakeStart() {
+    if (!requireGmail()) return;
+    showScreen('screen-st-start');
+  }
+
+  async function startStocktake() {
+    if (!isApiConfigured()) {
+      alert('API未設定です。');
+      return;
+    }
+    const btn = document.getElementById('btn-st-start');
+    btn.disabled = true;
+    showScreen('screen-loading');
+    try {
+      const url = getApiUrl() + '?action=startStocktake&gmail=' + encodeURIComponent(getGmail()) + '&password=' + encodeURIComponent(getPassword());
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '棚卸開始に失敗しました');
+      stSessionId = json.data.sessionId;
+      stCountedNum = 0;
+      stCurrentItem = null;
+      goToStScan();
+    } catch (err) {
+      alert('エラー: ' + err.message);
+      showScreen('screen-st-start');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function goToStScan() {
+    document.getElementById('st-scan-title').textContent = '棚卸中 (' + stCountedNum + '品カウント済)';
+    document.getElementById('st-manual-input').style.display = 'none';
+    showScreen('screen-st-scan');
+    startStScan();
+  }
+
+  function goToStManual() {
+    stopScan();
+    document.getElementById('st-manual-input').style.display = 'block';
+    document.getElementById('input-st-barcode').value = '';
+    document.getElementById('input-st-barcode').focus();
+  }
+
+  function startStScan() {
+    if (scanning) return;
+    loadZXing()
+      .then(() => {
+        if (!codeReader) codeReader = new ZXing.BrowserMultiFormatReader();
+        return codeReader.listVideoInputDevices();
+      })
+      .then(devices => {
+        if (devices.length === 0) throw new Error('カメラが見つかりません');
+        const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
+        const videoEl = document.getElementById('st-scan-video');
+        scanning = true;
+        codeReader.decodeFromVideoDevice(backCam.deviceId, videoEl, (result, err) => {
+          if (result) {
+            stopScan();
+            lookupStItem(result.getText());
+          }
+          if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error('Scan error:', err);
+          }
+        });
+      })
+      .catch(err => {
+        console.error('Camera error:', err);
+        scanning = false;
+        goToStManual();
+      });
+  }
+
+  function searchStManual() {
+    const input = document.getElementById('input-st-barcode').value.trim();
+    if (!input) return;
+    lookupStItem(input);
+  }
+
+  async function lookupStItem(barcode) {
+    if (searching) return;
+    searching = true;
+    showScreen('screen-loading');
+    try {
+      const url = getApiUrl() + '?action=findItemByBarcode&barcode=' + encodeURIComponent(barcode);
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '不明なエラー');
+      if (json.data) {
+        stCurrentItem = json.data;
+        goToStCount();
+      } else {
+        alert('未登録のコードです: ' + barcode);
+        goToStScan();
+      }
+    } catch (err) {
+      alert('通信エラー: ' + err.message);
+      goToStScan();
+    } finally {
+      searching = false;
+    }
+  }
+
+  function goToStCount() {
+    const container = document.getElementById('st-item-info');
+    clearAndAppend(container,
+      el('div', { className: 'result-card' },
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, '品目ID'),
+          el('span', { className: 'result-value' }, stCurrentItem['品目ID'])
+        ),
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, '品名'),
+          el('span', { className: 'result-value' }, stCurrentItem['品名'])
+        ),
+        el('div', { className: 'result-row' },
+          el('span', { className: 'result-label' }, '単位'),
+          el('span', { className: 'result-value' }, stCurrentItem['単位'] || '-')
+        )
+      )
+    );
+    document.getElementById('input-st-count').value = '';
+    showScreen('screen-st-count');
+    document.getElementById('input-st-count').focus();
+  }
+
+  async function sendStocktakeCount() {
+    const countVal = document.getElementById('input-st-count').value;
+    if (countVal === '' || countVal === null) {
+      alert('実数を入力してください。');
+      return;
+    }
+    const count = parseInt(countVal, 10);
+    if (isNaN(count) || count < 0) {
+      alert('実数は0以上の数値を入力してください。');
+      return;
+    }
+
+    const btn = document.getElementById('btn-st-send');
+    btn.disabled = true;
+    btn.textContent = '送信中...';
+
+    try {
+      const params = new URLSearchParams({
+        action: 'recordStocktakeCount',
+        gmail: getGmail(),
+        password: getPassword(),
+        sessionId: stSessionId,
+        品目ID: stCurrentItem['品目ID'],
+        実数: count,
+      });
+      const url = getApiUrl() + '?' + params.toString();
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+
+      if (!json.success) throw new Error(json.error || '記録に失敗しました');
+
+      stCountedNum++;
+      const diff = json.data['差異'];
+      const diffText = diff === 0 ? '差異なし' : (diff > 0 ? '+' + diff : String(diff));
+      alert(stCurrentItem['品名'] + '\n帳簿: ' + json.data['帳簿在庫'] + ' → 実数: ' + count + '\n' + diffText);
+      stCurrentItem = null;
+      goToStScan();
+    } catch (err) {
+      alert('送信エラー: ' + err.message + '\n再送ボタンを押してください。');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '送信';
+    }
+  }
+
+  function confirmStocktakeEnd() {
+    if (!stSessionId) {
+      goToTop();
+      return;
+    }
+    if (confirm('棚卸を終了しますか？\n終了するとサマリー画面に移動します。')) {
+      fetchStocktakeSummary();
+    }
+  }
+
+  async function fetchStocktakeSummary() {
+    stopScan();
+    showScreen('screen-loading');
+    try {
+      const params = new URLSearchParams({
+        action: 'getStocktakeSummary',
+        gmail: getGmail(),
+        password: getPassword(),
+        sessionId: stSessionId,
+      });
+      const url = getApiUrl() + '?' + params.toString();
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'サマリー取得に失敗');
+
+      const d = json.data;
+      const container = document.getElementById('st-summary-content');
+      clearAndAppend(container,
+        el('div', { className: 'result-card' },
+          el('div', { className: 'result-header found' }, '棚卸サマリー'),
+          el('div', { className: 'result-row' },
+            el('span', { className: 'result-label' }, 'カウント済み'),
+            el('span', { className: 'result-value' }, String(d.counted) + '品')
+          ),
+          el('div', { className: 'result-row' },
+            el('span', { className: 'result-label' }, '差異あり'),
+            el('span', { className: 'result-value' }, String(d.withDifference) + '品')
+          ),
+          el('div', { className: 'result-row' },
+            el('span', { className: 'result-label' }, '未カウント'),
+            el('span', { className: 'result-value' }, String(d.uncounted) + '品')
+          )
+        )
+      );
+      showScreen('screen-st-summary');
+    } catch (err) {
+      alert('エラー: ' + err.message);
+      goToStScan();
+    }
+  }
+
+  async function endStocktake() {
+    const btn = document.getElementById('btn-st-end');
+    btn.disabled = true;
+    showScreen('screen-loading');
+    try {
+      const params = new URLSearchParams({
+        action: 'endStocktake',
+        gmail: getGmail(),
+        password: getPassword(),
+        sessionId: stSessionId,
+      });
+      const url = getApiUrl() + '?' + params.toString();
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '終了処理に失敗');
+
+      stSessionId = null;
+      stCountedNum = 0;
+      stCurrentItem = null;
+      showScreen('screen-st-done');
+    } catch (err) {
+      alert('エラー: ' + err.message);
+      showScreen('screen-st-summary');
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   // --- ZXing 遅延読み込み ---
@@ -945,5 +1251,13 @@ const App = (() => {
     goToOpInput,
     goToOpConfirm,
     recordOp,
+    goToStocktakeStart,
+    startStocktake,
+    goToStScan,
+    goToStManual,
+    searchStManual,
+    sendStocktakeCount,
+    confirmStocktakeEnd,
+    endStocktake,
   };
 })();
