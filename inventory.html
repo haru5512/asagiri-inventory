@@ -37,6 +37,7 @@
       <button class="tab active" data-tab="stock" onclick="Inv.switchTab('stock')">現在在庫</button>
       <button class="tab" data-tab="lots" onclick="Inv.switchTab('lots')">賞味期限</button>
       <button class="tab" data-tab="history" onclick="Inv.switchTab('history')">入出庫履歴</button>
+      <button class="tab" data-tab="stocktake" onclick="Inv.switchTab('stocktake')">棚卸</button>
     </nav>
 
     <div class="filters" id="filters"></div>
@@ -153,6 +154,37 @@
           <button class="btn-cancel" onclick="Inv.closeModal()">キャンセル</button>
           <button class="btn-fetch" id="btn-reg-continue" onclick="Inv.registerItem(true)">登録して続けて入力</button>
           <button class="btn-fetch" id="btn-reg-close" onclick="Inv.registerItem(false)">登録して閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stocktake Detail Modal -->
+    <div id="st-modal-overlay" class="modal-overlay" style="display:none;" onclick="Inv.closeStModal(event)">
+      <div class="modal" style="max-width:800px;">
+        <div class="modal-header">
+          <h2 id="st-modal-title">棚卸詳細</h2>
+          <button class="modal-close" onclick="Inv.closeStDetailModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="table-container" style="max-height:400px;overflow-y:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>品目ID</th>
+                  <th>品名</th>
+                  <th style="text-align:right;">帳簿在庫</th>
+                  <th style="text-align:right;">実数</th>
+                  <th style="text-align:right;">差異</th>
+                  <th>備考</th>
+                </tr>
+              </thead>
+              <tbody id="st-detail-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" onclick="Inv.closeStDetailModal()">閉じる</button>
+          <button class="btn-fetch" id="btn-st-approve" onclick="Inv.approveStocktake()">承認して在庫調整</button>
         </div>
       </div>
     </div>
