@@ -296,7 +296,7 @@
         <video id="st-scan-video" playsinline></video>
       </div>
       <p class="scan-guide">バーコードをカメラに映してください</p>
-      <button class="btn btn-secondary" onclick="App.goToStManual()">
+      <button class="btn btn-secondary" id="btn-st-toggle-manual" onclick="App.goToStManual()">
         <span>&#x2328;</span> 手入力に切替
       </button>
       <div id="st-manual-input" style="display:none;">
@@ -306,6 +306,9 @@
         </div>
         <button class="btn btn-primary" onclick="App.searchStManual()">
           検索
+        </button>
+        <button class="btn btn-secondary" onclick="App.goToStScan()" style="margin-top:8px;">
+          スキャンに戻る
         </button>
       </div>
       <button class="btn btn-secondary" onclick="App.showUncountedItems()" style="margin-top:8px;">
