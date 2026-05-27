@@ -168,6 +168,10 @@
           <button class="modal-close" onclick="Inv.closeStDetailModal()">&times;</button>
         </div>
         <div class="modal-body">
+          <div id="st-print-header" class="st-print-header">
+            <h3 id="st-print-title">棚卸報告書</h3>
+            <div id="st-print-meta"></div>
+          </div>
           <div class="table-container" style="max-height:400px;overflow-y:auto;">
             <table>
               <thead>
@@ -187,6 +191,7 @@
         <div id="st-save-message" class="reg-message" style="display:none;margin:0 24px;"></div>
         <div class="modal-footer">
           <button class="btn-cancel" onclick="Inv.closeStDetailModal()">閉じる</button>
+          <button class="btn-fetch" id="btn-st-print" style="background:#555;" onclick="Inv.printStReport()">印刷</button>
           <button class="btn-fetch" id="btn-st-save" style="display:none;background:#1565c0;" onclick="Inv.saveStCounts()">修正を保存</button>
           <button class="btn-fetch" id="btn-st-approve" onclick="Inv.approveStocktake()">承認して在庫調整</button>
         </div>

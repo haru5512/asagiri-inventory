@@ -728,6 +728,18 @@ const Inv = (() => {
       const json = await res.json();
       if (!json.success) throw new Error(json.error || '取得に失敗');
 
+      // 印刷用メタ情報をセット
+      const meta = document.getElementById('st-print-meta');
+      meta.textContent = '';
+      // セッション情報を rawData.stocktake から取得
+      const sessionInfo = rawData.stocktake.find(function(r) { return r['セッションID'] === sessionId; });
+      if (sessionInfo) {
+        meta.appendChild(el('span', {}, 'セッションID: ' + sessionId));
+        meta.appendChild(el('span', {}, '日時: ' + formatDateTime(sessionInfo['開始日時'] || '')));
+        meta.appendChild(el('span', {}, '担当者: ' + (sessionInfo['担当者名'] || '')));
+        meta.appendChild(el('span', {}, 'ステータス: ' + (sessionInfo['ステータス'] || '')));
+      }
+
       tbody.textContent = '';
       stDetailData = json.data || [];
       if (stDetailData.length === 0) {
@@ -838,6 +850,12 @@ const Inv = (() => {
     }
   }
 
+  function printStReport() {
+    document.body.classList.add('printing-st-report');
+    window.print();
+    document.body.classList.remove('printing-st-report');
+  }
+
   function closeStDetailModal() {
     document.getElementById('st-modal-overlay').style.display = 'none';
     stDetailSessionId = null;
@@ -887,5 +905,5 @@ const Inv = (() => {
     rawData = { stock: [], lots: [], history: [], stocktake: [] };
   }
 
-  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake, saveStCounts };
+  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake, saveStCounts, printStReport };
 })();

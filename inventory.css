@@ -479,6 +479,25 @@ tbody tr:nth-child(even):hover { background: #f0f7f1; }
   background: #fce4ec !important;
 }
 
+/* Stocktake print header */
+.st-print-header {
+  display: none;
+}
+
+.st-print-header h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+#st-print-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-light);
+  margin-bottom: 12px;
+}
+
 /* Print */
 @media print {
   body { background: #fff; font-size: 11px; }
@@ -495,4 +514,14 @@ tbody tr:nth-child(even):hover { background: #f0f7f1; }
   tbody td { border-bottom: 1px solid #ccc; }
   tr { page-break-inside: avoid; }
   @page { size: A4 landscape; margin: 10mm; }
+
+  /* Stocktake report print */
+  body.printing-st-report #main-page > *:not(#st-modal-overlay) { display: none !important; }
+  body.printing-st-report #st-modal-overlay { display: flex !important; }
+  body.printing-st-report .modal { max-width: none; max-height: none; overflow: visible; box-shadow: none; }
+  body.printing-st-report .modal-close, body.printing-st-report .modal-footer { display: none !important; }
+  body.printing-st-report .st-print-header { display: block !important; }
+  body.printing-st-report .table-container { max-height: none !important; overflow: visible !important; }
+  body.printing-st-report .st-count-input { border: none; background: transparent; }
+  body.printing-st-report #st-save-message { display: none !important; }
 }
