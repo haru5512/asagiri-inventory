@@ -187,15 +187,65 @@ const Inv = (() => {
     document.getElementById('main-page').style.display = 'block';
     const userEl = document.getElementById('login-user');
     if (userEl) userEl.textContent = localStorage.getItem('USER_GMAIL') || '';
+    fetchAllTabs();
   }
 
   // --- Init ---
   function init() {
     if (isLoggedIn()) {
+      loadCacheForTab('stock');
       showMainPage();
     }
     renderFilters();
     renderTableHead();
+    renderStSummary();
+    renderTableBody();
+  }
+
+  // --- Cache ---
+  function saveCacheForTab(tab, data) {
+    try {
+      sessionStorage.setItem('inv_' + tab, JSON.stringify(data));
+    } catch (e) { /* ignore quota errors */ }
+  }
+
+  function loadCacheForTab(tab) {
+    try {
+      const cached = sessionStorage.getItem('inv_' + tab);
+      if (cached) {
+        rawData[tab] = JSON.parse(cached);
+        return true;
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  async function fetchAllTabs() {
+    if (!isApiConfigured()) return;
+    const gmail = localStorage.getItem('USER_GMAIL') || '';
+    const password = localStorage.getItem('USER_PASSWORD') || '';
+    const tabs = Object.keys(TAB_CONFIG);
+
+    const promises = tabs.map(async (tab) => {
+      try {
+        const config = TAB_CONFIG[tab];
+        const url = getApiUrl() + '?action=' + config.api
+          + '&gmail=' + encodeURIComponent(gmail)
+          + '&password=' + encodeURIComponent(password);
+        const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+        const json = await res.json();
+        if (json.success) {
+          rawData[tab] = json.data || [];
+          saveCacheForTab(tab, rawData[tab]);
+        }
+      } catch (e) { /* skip failed tabs */ }
+    });
+
+    await Promise.all(promises);
+    // Re-render current tab with fresh data
+    populateFilterOptions(rawData[currentTab]);
+    renderStSummary();
+    renderTableBody();
   }
 
   // --- Tab ---
@@ -206,8 +256,10 @@ const Inv = (() => {
     document.querySelectorAll('.tab').forEach(t => {
       t.classList.toggle('active', t.dataset.tab === tab);
     });
+    loadCacheForTab(tab);
     renderFilters();
     renderTableHead();
+    populateFilterOptions(rawData[currentTab]);
     renderStSummary();
     renderTableBody();
   }
@@ -222,7 +274,7 @@ const Inv = (() => {
     }
     container.appendChild(el('button', {
       className: 'btn-fetch', id: 'btn-fetch', onClick: fetchData
-    }, 'データ取得'));
+    }, 'データ更新'));
     if (currentTab === 'stock') {
       container.appendChild(el('button', {
         className: 'btn-register', id: 'btn-register', onClick: openModal
@@ -425,7 +477,7 @@ const Inv = (() => {
     const config = TAB_CONFIG[currentTab];
     const btn = document.getElementById('btn-fetch');
     btn.disabled = true;
-    btn.textContent = '取得中...';
+    btn.textContent = '更新中...';
 
     try {
       const gmail = localStorage.getItem('USER_GMAIL') || '';
@@ -439,6 +491,7 @@ const Inv = (() => {
       if (!json.success) throw new Error(json.error || 'データ取得に失敗しました');
 
       rawData[currentTab] = json.data || [];
+      saveCacheForTab(currentTab, rawData[currentTab]);
       populateFilterOptions(rawData[currentTab]);
       renderStSummary();
       renderTableBody();
@@ -446,7 +499,7 @@ const Inv = (() => {
       alert('通信エラー: ' + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'データ取得';
+      btn.textContent = 'データ更新';
     }
   }
 
