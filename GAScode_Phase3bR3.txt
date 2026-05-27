@@ -3347,22 +3347,10 @@ function getMyActiveSession(params) {
   var auth = requireGmailAuth(params.gmail, params.password);
 
   var sessions = getSheetData('T_棚卸セッション');
-  var active = null;
-  for (var i = 0; i < sessions.length; i++) {
-    if (sessions[i]['担当者ID'] === auth.userId && sessions[i]['ステータス'] === '進行中') {
-      active = sessions[i];
-      break;
-    }
-  }
-
-  if (!active) return null;
-
-  var sessionId = active['セッションID'];
-
-  // カウント済み数を取得
-  var details = getSheetData('T_棚卸明細')
-    .filter(function(d) { return d['セッションID'] === sessionId; });
-  var countedNum = details.filter(function(d) { return d['備考'] !== '未カウント'; }).length;
+  var details = getSheetData('T_棚卸明細');
+  var users = getSheetData('M_担当者');
+  var userCache = {};
+  users.forEach(function(u) { userCache[u['担当者ID']] = u['氏名'] || u['担当者ID']; });
 
   // 帳簿在庫>0の全品目数
   var items = getItems();
@@ -3370,11 +3358,35 @@ function getMyActiveSession(params) {
     return getCurrentStockByItemId(item['品目ID']) > 0;
   }).length;
 
+  var mySession = null;
+  var otherSessions = [];
+
+  for (var i = 0; i < sessions.length; i++) {
+    var s = sessions[i];
+    if (s['ステータス'] !== '進行中') continue;
+
+    var sid = s['セッションID'];
+    var sessionDetails = details.filter(function(d) { return d['セッションID'] === sid; });
+    var countedNum = sessionDetails.filter(function(d) { return d['備考'] !== '未カウント'; }).length;
+
+    var info = {
+      sessionId: sid,
+      startedAt: s['開始日時'],
+      担当者名: userCache[s['担当者ID']] || s['担当者ID'] || '',
+      countedNum: countedNum,
+      totalItems: totalItems
+    };
+
+    if (s['担当者ID'] === auth.userId) {
+      mySession = info;
+    } else {
+      otherSessions.push(info);
+    }
+  }
+
   return {
-    sessionId: sessionId,
-    startedAt: active['開始日時'],
-    countedNum: countedNum,
-    totalItems: totalItems
+    mySession: mySession,
+    otherSessions: otherSessions
   };
 }
 

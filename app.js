@@ -832,8 +832,10 @@ const App = (() => {
     if (!requireGmail()) return;
     // 進行中セッションの検索
     const resumeArea = document.getElementById('st-resume-area');
+    const joinArea = document.getElementById('st-join-area');
     const newArea = document.getElementById('st-new-area');
     resumeArea.style.display = 'none';
+    joinArea.style.display = 'none';
     newArea.style.display = 'block';
     showScreen('screen-st-start');
 
@@ -842,8 +844,12 @@ const App = (() => {
       const url = getApiUrl() + '?action=getMyActiveSession&gmail=' + encodeURIComponent(getGmail()) + '&password=' + encodeURIComponent(getPassword());
       const res = await fetch(url, { method: 'GET', redirect: 'follow' });
       const json = await res.json();
-      if (json.success && json.data) {
-        const s = json.data;
+      if (!json.success || !json.data) return;
+      const data = json.data;
+
+      // 自分の進行中セッション
+      if (data.mySession) {
+        const s = data.mySession;
         const infoEl = document.getElementById('st-resume-info');
         infoEl.textContent = '';
         infoEl.appendChild(el('div', { className: 'result-row' },
@@ -860,10 +866,33 @@ const App = (() => {
         resumeArea.dataset.totalItems = s.totalItems;
         newArea.style.display = 'none';
       }
+
+      // 他の人の進行中セッション
+      if (data.otherSessions && data.otherSessions.length > 0) {
+        const listEl = document.getElementById('st-join-list');
+        listEl.textContent = '';
+        for (const s of data.otherSessions) {
+          const btn = el('button', {
+            className: 'btn btn-outline',
+            style: 'margin-top:6px;text-align:left;width:100%;',
+            onClick: function() { joinSession(s.sessionId, s.countedNum, s.totalItems); }
+          },
+            el('span', {}, s.担当者名 + ' — ' + s.countedNum + '/' + s.totalItems + '品カウント済')
+          );
+          listEl.appendChild(btn);
+        }
+        joinArea.style.display = 'block';
+      }
     } catch (e) {
-      // 検索失敗しても新規開始は可能
       console.error('Active session check failed:', e);
     }
+  }
+
+  function joinSession(sessionId, countedNum, totalItems) {
+    stSessionId = sessionId;
+    stCountedNum = countedNum;
+    stTotalItems = totalItems;
+    goToStScan();
   }
 
   async function showUncountedItems() {
