@@ -1438,11 +1438,23 @@ const App = (() => {
     actions.textContent = '';
 
     // 入出庫ボタン
-    const ioRow = el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;' },
-      el('button', { className: 'btn btn-primary', onClick: () => startOpFromResult('stockin', item) }, '📥 入庫'),
-      el('button', { className: 'btn btn-primary', onClick: () => startOpFromResult('stockout', item) }, '📤 出庫'),
-      el('button', { className: 'btn btn-secondary', onClick: () => startOpFromResult('dispose', item) }, '🗑 廃棄'),
-      el('button', { className: 'btn btn-secondary', onClick: () => startOpFromResult('move', item) }, '🔄 移動')
+    const ioRow = el('div', { className: 'result-io-grid' },
+      el('button', { className: 'result-io-btn result-io-btn--in', onClick: () => startOpFromResult('stockin', item) },
+        el('img', { className: 'result-io-icon', src: './icons/ui-stockin.svg', alt: '' }),
+        el('span', { className: 'result-io-label' }, '入庫')
+      ),
+      el('button', { className: 'result-io-btn result-io-btn--out', onClick: () => startOpFromResult('stockout', item) },
+        el('img', { className: 'result-io-icon', src: './icons/ui-stockout.svg', alt: '' }),
+        el('span', { className: 'result-io-label' }, '出庫')
+      ),
+      el('button', { className: 'result-io-btn result-io-btn--move', onClick: () => startOpFromResult('move', item) },
+        el('img', { className: 'result-io-icon', src: './icons/ui-move.svg', alt: '' }),
+        el('span', { className: 'result-io-label' }, '移動')
+      ),
+      el('button', { className: 'result-io-btn result-io-btn--dispose', onClick: () => startOpFromResult('dispose', item) },
+        el('img', { className: 'result-io-icon', src: './icons/ui-dispose.svg', alt: '' }),
+        el('span', { className: 'result-io-label' }, '廃棄')
+      )
     );
     actions.appendChild(ioRow);
 
