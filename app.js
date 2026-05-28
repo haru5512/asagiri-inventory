@@ -1405,11 +1405,30 @@ const App = (() => {
     }
 
     clearAndAppend(document.getElementById('result-content'), card);
-    clearAndAppend(document.getElementById('result-actions'),
-      el('button', { className: 'btn btn-primary', onClick: goToScan }, 'もう一度スキャン'),
-      el('button', { className: 'btn btn-secondary', onClick: () => goToManual(false) }, '手入力で再検索')
+
+    const actions = document.getElementById('result-actions');
+    actions.textContent = '';
+
+    // 入出庫ボタン
+    const ioRow = el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;' },
+      el('button', { className: 'btn btn-primary', onClick: () => startOpFromResult('stockin', item) }, '📥 入庫'),
+      el('button', { className: 'btn btn-primary', onClick: () => startOpFromResult('stockout', item) }, '📤 出庫'),
+      el('button', { className: 'btn btn-secondary', onClick: () => startOpFromResult('dispose', item) }, '🗑 廃棄'),
+      el('button', { className: 'btn btn-secondary', onClick: () => startOpFromResult('move', item) }, '🔄 移動')
     );
+    actions.appendChild(ioRow);
+
+    actions.appendChild(el('button', { className: 'btn btn-outline', onClick: goToScan }, 'もう一度スキャン'));
+    actions.appendChild(el('button', { className: 'btn btn-outline', onClick: () => goToManual(false) }, '手入力で再検索'));
+
     showScreen('screen-result');
+  }
+
+  function startOpFromResult(op, item) {
+    if (!requireGmail()) return;
+    currentOp = op;
+    currentItem = item;
+    goToOpInput();
   }
 
   // --- 結果表示: 未登録 ---
