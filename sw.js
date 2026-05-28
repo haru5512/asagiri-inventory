@@ -1,7 +1,7 @@
 // Phase 2: ネットワーク優先、失敗時のみキャッシュ。
 // 本格的なキャッシュ更新戦略は Phase 3 で実装する(設計図 §5.キャッシュ更新戦略 参照)
 
-const CACHE_NAME = 'asagiri-inventory-v0.4.0';
+const CACHE_NAME = 'asagiri-inventory-v0.4.1';
 const PRECACHE = [
   './',
   './index.html',
@@ -37,9 +37,9 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // GAS API リクエストはキャッシュしない(常にネットワーク)
-  if (event.request.url.includes('script.google.com')) {
-    event.respondWith(fetch(event.request));
+  // GAS API リクエストはSWを介さずブラウザに任せる
+  if (event.request.url.includes('script.google.com') ||
+      event.request.url.includes('script.googleusercontent.com')) {
     return;
   }
   // 静的アセットはネットワーク優先、失敗時キャッシュ
