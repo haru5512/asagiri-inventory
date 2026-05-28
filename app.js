@@ -290,10 +290,35 @@ const App = (() => {
   }
 
   // --- 画面遷移 ---
+  let currentScreen = 'screen-top';
+
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
+    // トップ以外に遷移する時にhistoryに積む
+    if (id !== 'screen-top' && id !== 'screen-loading' && currentScreen === 'screen-top') {
+      history.pushState({ screen: id }, '');
+    }
+    currentScreen = id;
   }
+
+  // ブラウザバックでトップに戻る
+  window.addEventListener('popstate', function() {
+    if (currentScreen !== 'screen-top') {
+      stopScan();
+      currentOp = null;
+      currentItem = null;
+      currentLocations = { from: '', to: '' };
+      opFromResult = false;
+      stSessionId = null;
+      stCountedNum = 0;
+      stCurrentItem = null;
+      currentScreen = 'screen-top';
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById('screen-top').classList.add('active');
+      loadDashboard();
+    }
+  });
 
   function goToTop() {
     stopScan();
