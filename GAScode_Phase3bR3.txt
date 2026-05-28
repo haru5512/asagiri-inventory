@@ -3467,15 +3467,19 @@ function getDashboard(params) {
     else if (kubun === '出庫' || kubun === '廃棄' || kubun === '移動') stockoutCount++;
   }
 
-  // 進行中の棚卸セッション進捗
+  // 今月の棚卸セッション進捗（先月以前は無視）
   var stocktakeText = '-';
+  var thisMonth = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM');
   var sessions = getSheetData('T_棚卸セッション');
   var activeSession = null;
   for (var j = 0; j < sessions.length; j++) {
-    if (sessions[j]['ステータス'] === '進行中') {
-      activeSession = sessions[j];
-      break;
-    }
+    if (sessions[j]['ステータス'] !== '進行中') continue;
+    var startDate = sessions[j]['開始日時'];
+    if (!startDate) continue;
+    var sessionMonth = Utilities.formatDate(new Date(startDate), 'Asia/Tokyo', 'yyyy/MM');
+    if (sessionMonth !== thisMonth) continue;
+    activeSession = sessions[j];
+    break;
   }
 
   if (activeSession) {
