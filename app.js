@@ -6,6 +6,7 @@ const App = (() => {
   let searching = false;
   let currentOp = null;    // 'stockin' | 'stockout' | 'dispose' | 'move'
   let currentItem = null;
+  let opFromResult = false; // 検索結果から入出庫を開始したか
   let currentLocations = { from: '', to: '' };
   let stSessionId = null;   // 棚卸セッションID
   let stCountedNum = 0;     // カウント済み品目数
@@ -275,6 +276,7 @@ const App = (() => {
     currentOp = null;
     currentItem = null;
     currentLocations = { from: '', to: '' };
+    opFromResult = false;
     stSessionId = null;
     stCountedNum = 0;
     stCurrentItem = null;
@@ -286,6 +288,7 @@ const App = (() => {
     if (!requireGmail()) return;
     currentOp = op;
     currentItem = null;
+    opFromResult = false;
     goToOpScan();
   }
 
@@ -1428,7 +1431,16 @@ const App = (() => {
     if (!requireGmail()) return;
     currentOp = op;
     currentItem = item;
+    opFromResult = true;
     goToOpInput();
+  }
+
+  function goBackFromOpInput() {
+    if (opFromResult) {
+      showFound(currentItem);
+    } else {
+      goToOpScan();
+    }
   }
 
   // --- 結果表示: 未登録 ---
@@ -1480,6 +1492,7 @@ const App = (() => {
     reloadLocations,
     startOp,
     goToOpScan,
+    goBackFromOpInput,
     goToOpManual,
     searchOpManual,
     goToOpInput,
