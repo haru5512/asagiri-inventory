@@ -840,170 +840,37 @@ html, body {
   }
 }
 
-/* ===== Visual proposal: image-style top screen ===== */
+/* ===== Top screen enhancements ===== */
 
 #screen-top {
   background: #f7f7f7;
 }
 
-#screen-top .header-top {
-  min-height: 120px;
-  align-items: center;
-  padding: 26px 24px 22px;
-  background:
-    radial-gradient(circle at 24% 20%, rgba(255, 255, 255, 0.12), transparent 28%),
-    linear-gradient(145deg, #0b6c30 0%, #248243 100%);
-}
-
-#screen-top .header h1 {
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1.05;
-}
-
-#screen-top .header .version {
-  font-size: 15px;
-  font-weight: 700;
-  opacity: 0.92;
-}
-
-#screen-top .sync-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  font-size: 17px;
-  font-weight: 800;
-}
-
-#screen-top .sync-badge::before {
-  content: "✓";
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #fff;
-  color: var(--primary);
-  font-size: 18px;
-  line-height: 1;
-}
-
 #screen-top .content-top {
-  padding: 18px 18px 24px;
-}
-
-#screen-top .work-summary {
-  grid-template-columns: 1.15fr 1fr 1fr 1fr;
-  gap: 0;
-  min-height: 86px;
-  margin-bottom: 12px;
-  padding: 16px 14px;
-  border-color: #dedede;
-  border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-}
-
-#screen-top .work-summary-title {
-  grid-column: auto;
-  align-self: center;
-  color: var(--primary);
-  font-size: 18px;
-  font-weight: 800;
-}
-
-#screen-top .work-chip {
-  display: flex;
-  min-height: 58px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border-left: 1px solid #dedede;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 16px;
-}
-
-#screen-top .work-chip strong {
-  display: block;
-  margin: 2px 0 0;
-  font-size: 34px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-#screen-top .work-chip--in strong { color: #1f76d2; }
-#screen-top .work-chip--out strong { color: #ef7d00; }
-#screen-top .work-chip--st strong { color: var(--primary); }
-
-#screen-top .top-sync-status,
-#screen-top .bottom-sync-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: #5f6670;
-  font-size: 16px;
-  line-height: 1;
-}
-
-#screen-top .top-sync-status::before,
-#screen-top .bottom-sync-status::before {
-  content: "↻";
-  color: #24a15a;
-  font-size: 24px;
-  line-height: 1;
-}
-
-#screen-top .top-sync-status {
-  margin: 8px 0 18px;
-}
-
-#screen-top .top-divider {
-  height: 1px;
-  margin-bottom: 22px;
-  background: #d8d8d8;
-}
-
-#screen-top .top-section {
-  margin-bottom: 24px;
-}
-
-#screen-top .top-section--stocktake {
-  margin-bottom: 16px;
+  padding: 14px 16px 20px;
 }
 
 #screen-top .section-label {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   color: #2f3b4a;
-  font-size: 19px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
 }
 
+/* Search buttons */
 #screen-top .search-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 #screen-top .action-button {
-  min-height: 106px;
-  justify-content: center;
-  gap: 8px;
-  padding: 20px 16px;
+  min-height: 64px;
+  padding: 12px 10px;
   border-radius: 10px;
 }
 
 #screen-top .action-button--scan {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 40%),
-    var(--primary);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 40%), var(--primary);
 }
 
 #screen-top .action-button--manual {
@@ -1012,69 +879,61 @@ html, body {
 }
 
 #screen-top .action-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
 }
 
 #screen-top .action-title {
-  font-size: 24px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 #screen-top .action-sub {
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
 }
 
+/* Operation buttons */
 #screen-top .operation-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 #screen-top .operation-button {
   position: relative;
   display: flex;
-  min-height: 150px;
+  min-height: 80px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 18px 38px 18px 18px;
+  gap: 4px;
+  padding: 10px 8px;
   border-width: 1px;
   border-radius: 10px;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   text-align: center;
 }
 
 #screen-top .operation-icon {
-  width: 54px;
-  height: 54px;
-  font-size: 34px;
+  width: 30px;
+  height: 30px;
 }
 
 #screen-top .operation-title {
-  font-size: 27px;
-  line-height: 1.05;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 #screen-top .operation-sub {
-  color: #222;
-  font-size: 15px;
-  line-height: 1.3;
+  color: #555;
+  font-size: 10px;
+  line-height: 1.2;
 }
 
 #screen-top .operation-chevron,
 #screen-top .stocktake-chevron,
 #screen-top .settings-chevron {
-  display: block;
-  position: absolute;
-  right: 18px;
-  color: #222;
-  font-size: 44px;
-  font-weight: 300;
-  line-height: 1;
+  display: none;
 }
 
 #screen-top .operation-button--in {
@@ -1101,115 +960,78 @@ html, body {
   color: #d72f2f;
 }
 
+/* Stocktake button */
 #screen-top .stocktake-button {
   position: relative;
-  min-height: 82px;
-  gap: 18px;
-  padding: 16px 54px 16px 26px;
+  min-height: 56px;
+  gap: 10px;
+  padding: 12px 16px;
   border-radius: 10px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 40%),
-    var(--primary);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 40%), var(--primary);
 }
 
 #screen-top .stocktake-icon {
-  width: 48px;
-  height: 48px;
+  width: 28px;
+  height: 28px;
 }
 
 #screen-top .stocktake-title {
-  font-size: 26px;
-  line-height: 1.1;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 #screen-top .stocktake-sub {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
 }
 
+/* Settings button */
 #screen-top .settings-button {
-  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  min-height: 66px;
-  margin-bottom: 18px;
-  border-color: #dddddd;
+  gap: 8px;
+  min-height: 44px;
+  margin-bottom: 10px;
+  border-color: #ddd;
   border-radius: 10px;
   background: #fff;
-  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.05);
-  color: #222;
-  font-size: 24px;
-  font-weight: 800;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  color: #555;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 #screen-top .settings-icon {
-  width: 36px;
-  height: 36px;
+  width: 20px;
+  height: 20px;
   display: block;
 }
 
-@media (max-width: 420px) {
-  #screen-top .header-top {
-    padding-left: 18px;
-    padding-right: 18px;
-  }
+/* Dashboard summary */
+#screen-top .work-summary {
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
 
-  #screen-top .header h1 {
-    font-size: 24px;
-  }
+#screen-top .work-chip strong {
+  font-size: 22px;
+  font-weight: 800;
+}
 
-  #screen-top .sync-badge {
-    min-height: 38px;
-    padding: 0 12px;
-    font-size: 14px;
-  }
+#screen-top .work-chip--in strong { color: #1f76d2; }
+#screen-top .work-chip--out strong { color: #ef7d00; }
+#screen-top .work-chip--st strong { color: var(--primary); }
 
-  #screen-top .work-summary {
-    grid-template-columns: 1fr 1fr 1fr;
-  }
+#screen-top .top-sync-status,
+#screen-top .bottom-sync-status {
+  font-size: 12px;
+}
 
-  #screen-top .work-summary-title {
-    grid-column: 1 / -1;
-    margin-bottom: 8px;
-  }
+#screen-top .top-sync-status {
+  margin: 6px 0 12px;
+}
 
-  #screen-top .work-chip:first-of-type {
-    border-left: none;
-  }
-
-  #screen-top .action-button {
-    min-height: 92px;
-    padding: 16px 12px;
-  }
-
-  #screen-top .action-title,
-  #screen-top .stocktake-title {
-    font-size: 22px;
-  }
-
-  #screen-top .action-sub,
-  #screen-top .stocktake-sub {
-    font-size: 13px;
-  }
-
-  #screen-top .operation-button {
-    min-height: 126px;
-    padding-right: 28px;
-  }
-
-  #screen-top .operation-icon {
-    width: 44px;
-    height: 44px;
-    font-size: 28px;
-  }
-
-  #screen-top .operation-title {
-    font-size: 22px;
-  }
-
-  #screen-top .operation-sub {
-    font-size: 13px;
-  }
+#screen-top .top-divider {
+  margin-bottom: 14px;
 }
