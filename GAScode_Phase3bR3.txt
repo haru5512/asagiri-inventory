@@ -2576,6 +2576,11 @@ function getTransactionHistory() {
     locCache[loc['場所ID']] = loc;
   });
 
+  const userCache = {};
+  getSheetData(SHEETS.M_USER).forEach(u => {
+    if (u['メールアドレス']) userCache[u['メールアドレス']] = u['氏名'] || u['担当者ID'];
+  });
+
   return data
     .filter(row => row['ステータス'] === '確定' || row['ステータス'] === '承認済')
     .map(row => {
@@ -2589,7 +2594,7 @@ function getTransactionHistory() {
         大カテゴリ: item['大カテゴリ'] || '',
         数量: Number(row['数量']) || 0,
         場所名: loc['場所名'] || row['場所ID'] || '',
-        Gmail: row['Gmail'] || '',
+        担当者名: userCache[row['Gmail']] || row['Gmail'] || '',
       };
     })
     .sort((a, b) => (a['日時'] > b['日時'] ? -1 : 1));

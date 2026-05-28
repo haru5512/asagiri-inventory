@@ -84,7 +84,7 @@ const Inv = (() => {
         { key: '品名', label: '品名' },
         { key: '数量', label: '数量', align: 'right' },
         { key: '場所名', label: '場所' },
-        { key: 'Gmail', label: '担当者' },
+        { key: '担当者名', label: '担当者' },
       ],
       filters: ['category', 'itemName', 'period', 'opType'],
     },

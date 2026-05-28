@@ -660,7 +660,7 @@ const App = (() => {
       rows.push(['ロット引き当て', 'FIFO自動（記録後に結果表示）']);
     }
 
-    rows.push(['担当者', data.gmail]);
+    rows.push(['担当者', localStorage.getItem('USER_NAME') || data.gmail]);
 
     for (const [label, value] of rows) {
       card.appendChild(
