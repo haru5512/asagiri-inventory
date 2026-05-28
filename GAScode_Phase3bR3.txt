@@ -2823,6 +2823,8 @@ function dispatchAction(action, params) {
       return getUncountedItems(params);
     case 'cancelStocktake':
       return cancelStocktake(params);
+    case 'getDashboard':
+      return getDashboard(params);
     default:
       throw new Error(`未対応のaction: ${action}`);
   }
@@ -3439,3 +3441,65 @@ function getMyActiveSession(params) {
   };
 }
 
+
+// ===== ダッシュボード（今日の作業サマリー）=====
+
+function getDashboard(params) {
+  requireGmailAuth(params.gmail, params.password);
+
+  var today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
+
+  // 今日の入出庫件数
+  var transactions = getSheetData('T_入出庫');
+  var stockinCount = 0;
+  var stockoutCount = 0;
+
+  for (var i = 0; i < transactions.length; i++) {
+    var t = transactions[i];
+    var dateStr = '';
+    if (t['日時']) {
+      dateStr = Utilities.formatDate(new Date(t['日時']), 'Asia/Tokyo', 'yyyy/MM/dd');
+    }
+    if (dateStr !== today) continue;
+
+    var kubun = t['区分'] || '';
+    if (kubun === '入庫') stockinCount++;
+    else if (kubun === '出庫' || kubun === '廃棄' || kubun === '移動') stockoutCount++;
+  }
+
+  // 進行中の棚卸セッション進捗
+  var stocktakeText = '-';
+  var sessions = getSheetData('T_棚卸セッション');
+  var activeSession = null;
+  for (var j = 0; j < sessions.length; j++) {
+    if (sessions[j]['ステータス'] === '進行中') {
+      activeSession = sessions[j];
+      break;
+    }
+  }
+
+  if (activeSession) {
+    var details = getSheetData('T_棚卸明細');
+    var sid = activeSession['セッションID'];
+    var counted = details.filter(function(d) {
+      return d['セッションID'] === sid && d['備考'] !== '未カウント';
+    }).length;
+
+    var items = getItems();
+    var totalItems = items.filter(function(item) {
+      return getCurrentStockByItemId(item['品目ID']) > 0;
+    }).length;
+
+    if (totalItems > 0) {
+      stocktakeText = Math.round(counted / totalItems * 100) + '%';
+    } else {
+      stocktakeText = '0%';
+    }
+  }
+
+  return {
+    stockin: stockinCount,
+    stockout: stockoutCount,
+    stocktake: stocktakeText
+  };
+}

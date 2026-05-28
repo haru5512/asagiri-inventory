@@ -15,43 +15,97 @@
 
   <!-- Screen 1: Top -->
   <div id="screen-top" class="screen active">
-    <div class="header">
-      <div>
+    <div class="header header-top">
+      <div class="header-top-left">
         <h1>Asagiri Inventory</h1>
         <span class="version" id="app-version"></span>
       </div>
+      <span class="sync-badge" id="sync-badge">同期済み</span>
     </div>
-    <div class="content">
-      <div class="menu">
-        <div class="menu-section-label">品目検索</div>
-        <button class="btn btn-primary" id="btn-scan" onclick="App.goToScan()">
-          <span>&#x1F4F7;</span> スキャン開始
-        </button>
-        <button class="btn btn-secondary" id="btn-manual" onclick="App.goToManual()">
-          <span>&#x2328;</span> 手入力
-        </button>
-        <div class="menu-section-label">入出庫</div>
-        <button class="btn btn-primary" onclick="App.startOp('stockin')">
-          <span>&#x1F4E5;</span> 入庫
-        </button>
-        <button class="btn btn-primary" onclick="App.startOp('stockout')">
-          <span>&#x1F4E4;</span> 出庫
-        </button>
-        <button class="btn btn-secondary" onclick="App.startOp('dispose')">
-          <span>&#x1F5D1;</span> 廃棄
-        </button>
-        <button class="btn btn-secondary" onclick="App.startOp('move')">
-          <span>&#x1F504;</span> 移動
-        </button>
-        <div class="menu-section-label">棚卸</div>
-        <button class="btn btn-primary" onclick="App.goToStocktakeStart()">
-          <span>&#x1F4CB;</span> 棚卸開始
-        </button>
-        <div class="menu-divider"></div>
-        <button class="btn btn-outline" onclick="App.goToSettings()">
-          <span>&#x2699;</span> 設定
-        </button>
+    <div class="content content-top">
+
+      <!-- 今日の作業 -->
+      <div class="work-summary" aria-label="今日の作業">
+        <span class="work-summary-title">今日の作業</span>
+        <span class="work-chip work-chip--in">入庫 <strong id="dash-stockin">-</strong></span>
+        <span class="work-chip work-chip--out">出庫 <strong id="dash-stockout">-</strong></span>
+        <span class="work-chip work-chip--st">棚卸 <strong id="dash-stocktake">-</strong></span>
       </div>
+      <div class="top-sync-status" id="unsync-bar">未同期 0件</div>
+      <div class="top-divider"></div>
+
+      <!-- 商品検索 -->
+      <section class="top-section">
+        <div class="section-label">商品検索</div>
+        <div class="search-actions">
+          <button class="action-button action-button--scan" id="btn-scan" onclick="App.goToScan()">
+            <img class="action-icon" src="./icons/ui-scan.svg" alt="" aria-hidden="true">
+            <span class="action-text">
+              <span class="action-title">スキャン</span>
+              <span class="action-sub">バーコードを読み取る</span>
+            </span>
+          </button>
+          <button class="action-button action-button--manual" id="btn-manual" onclick="App.goToManual()">
+            <img class="action-icon" src="./icons/ui-manual.svg" alt="" aria-hidden="true">
+            <span class="action-text">
+              <span class="action-title">手入力</span>
+              <span class="action-sub">バーコードを手入力</span>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 入出庫 -->
+      <section class="top-section">
+        <div class="section-label">入出庫</div>
+        <div class="operation-grid">
+          <button class="operation-button operation-button--in" onclick="App.startOp('stockin')">
+            <img class="operation-icon" src="./icons/ui-stockin.svg" alt="" aria-hidden="true">
+            <span class="operation-title">入庫</span>
+            <span class="operation-sub">商品を入庫する</span>
+            <span class="operation-chevron" aria-hidden="true">›</span>
+          </button>
+          <button class="operation-button operation-button--out" onclick="App.startOp('stockout')">
+            <img class="operation-icon" src="./icons/ui-stockout.svg" alt="" aria-hidden="true">
+            <span class="operation-title">出庫</span>
+            <span class="operation-sub">商品を出庫する</span>
+            <span class="operation-chevron" aria-hidden="true">›</span>
+          </button>
+          <button class="operation-button operation-button--move" onclick="App.startOp('move')">
+            <img class="operation-icon" src="./icons/ui-move.svg" alt="" aria-hidden="true">
+            <span class="operation-title">移動</span>
+            <span class="operation-sub">在庫を移動する</span>
+            <span class="operation-chevron" aria-hidden="true">›</span>
+          </button>
+          <button class="operation-button operation-button--dispose" onclick="App.startOp('dispose')">
+            <img class="operation-icon" src="./icons/ui-dispose.svg" alt="" aria-hidden="true">
+            <span class="operation-title">廃棄</span>
+            <span class="operation-sub">商品を廃棄する</span>
+            <span class="operation-chevron" aria-hidden="true">›</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 棚卸 -->
+      <section class="top-section top-section--stocktake">
+        <div class="section-label">棚卸</div>
+        <button class="stocktake-button" onclick="App.goToStocktakeStart()">
+          <img class="stocktake-icon" src="./icons/ui-stocktake.svg" alt="" aria-hidden="true">
+          <span class="stocktake-text">
+            <span class="stocktake-title">棚卸開始</span>
+            <span class="stocktake-sub">棚卸作業を開始する</span>
+          </span>
+          <span class="stocktake-chevron" aria-hidden="true">›</span>
+        </button>
+      </section>
+
+      <!-- 設定 -->
+      <button class="settings-button" onclick="App.goToSettings()">
+        <img class="settings-icon" src="./icons/ui-settings.svg" alt="" aria-hidden="true">
+        <span>設定</span>
+        <span class="settings-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="bottom-sync-status">未同期 0件</div>
     </div>
   </div>
 

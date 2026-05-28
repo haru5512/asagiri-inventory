@@ -80,6 +80,30 @@ const App = (() => {
     }
 
     autoRefreshLocations();
+    loadDashboard();
+  }
+
+  async function loadDashboard() {
+    if (!isApiConfigured() || !isGmailConfigured()) return;
+    try {
+      const params = new URLSearchParams({
+        action: 'getDashboard',
+        gmail: getGmail(),
+        password: getPassword(),
+      });
+      const res = await fetch(getApiUrl() + '?' + params.toString(), { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success || !json.data) return;
+      const d = json.data;
+      const elIn = document.getElementById('dash-stockin');
+      const elOut = document.getElementById('dash-stockout');
+      const elSt = document.getElementById('dash-stocktake');
+      if (elIn) elIn.textContent = d.stockin;
+      if (elOut) elOut.textContent = d.stockout;
+      if (elSt) elSt.textContent = d.stocktake;
+    } catch (e) {
+      console.error('Dashboard load failed:', e);
+    }
   }
 
   function updateApiStatus() {
@@ -281,6 +305,7 @@ const App = (() => {
     stCountedNum = 0;
     stCurrentItem = null;
     showScreen('screen-top');
+    loadDashboard();
   }
 
   // --- 入出庫フロー ---
