@@ -367,6 +367,17 @@ const Inv = (() => {
               btn.addEventListener('click', () => openStDetail(row['セッションID'], row['ステータス']));
               td.appendChild(btn);
             }
+            if (row['ステータス'] === '進行中') {
+              const delBtn = document.createElement('button');
+              delBtn.textContent = '削除';
+              delBtn.className = 'btn-fetch';
+              delBtn.style.padding = '4px 12px';
+              delBtn.style.marginLeft = '4px';
+              delBtn.style.backgroundColor = '#d32f2f';
+              delBtn.style.color = '#fff';
+              delBtn.addEventListener('click', () => cancelStocktakeSession(row['セッションID']));
+              td.appendChild(delBtn);
+            }
           } else {
             let val = row[col.key] != null ? String(row[col.key]) : '';
             if (val && (col.key === '開始日時' || col.key === '日時')) {
@@ -694,6 +705,27 @@ const Inv = (() => {
   }
 
   // --- Stocktake detail ---
+  async function cancelStocktakeSession(sessionId) {
+    if (!confirm('セッション ' + sessionId + ' を削除しますか？\nカウント済みデータも全て削除されます。')) return;
+    try {
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const params = new URLSearchParams({
+        action: 'cancelStocktake',
+        gmail: gmail,
+        password: password,
+        sessionId: sessionId,
+      });
+      const res = await fetch(getApiUrl() + '?' + params.toString(), { redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || '削除に失敗しました');
+      alert('削除しました');
+      fetchData();
+    } catch (err) {
+      alert('エラー: ' + err.message);
+    }
+  }
+
   let stDetailSessionId = null;
   let stDetailEditable = false;
   let stDetailData = [];

@@ -2821,6 +2821,8 @@ function dispatchAction(action, params) {
       return getMyActiveSession(params);
     case 'getUncountedItems':
       return getUncountedItems(params);
+    case 'cancelStocktake':
+      return cancelStocktake(params);
     default:
       throw new Error(`未対応のaction: ${action}`);
   }
@@ -3117,6 +3119,53 @@ function endStocktake(params) {
     sessionSheet.getRange(sessionRow, endTimeCol + 1).setValue(now);
 
     return { success: true, uncountedItems: uncountedItems };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+
+// ===== 5b. 棚卸キャンセル（進行中セッション削除）=====
+
+function cancelStocktake(params) {
+  var auth = requireGmailAuth(params.gmail, params.password);
+
+  if (!params.sessionId) throw new Error('セッションIDが必要です');
+
+  var sessionSheet = getSheet('T_棚卸セッション');
+  var sessionData = sessionSheet.getDataRange().getValues();
+  var headers = sessionData[0];
+  var sessionIdCol = headers.indexOf('セッションID');
+  var statusCol = headers.indexOf('ステータス');
+
+  var sessionRow = -1;
+  for (var i = 1; i < sessionData.length; i++) {
+    if (sessionData[i][sessionIdCol] === params.sessionId) {
+      if (sessionData[i][statusCol] !== '進行中') throw new Error('進行中のセッションのみキャンセルできます');
+      sessionRow = i + 1;
+      break;
+    }
+  }
+  if (sessionRow < 0) throw new Error('セッションが見つかりません');
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) throw new Error('他の処理が実行中です');
+
+  try {
+    // 明細があれば削除
+    var detailSheet = getSheet('T_棚卸明細');
+    var detailData = detailSheet.getDataRange().getValues();
+    var detailHeaders = detailData[0];
+    var detailSidCol = detailHeaders.indexOf('セッションID');
+    // 下の行から削除（行番号がずれないように）
+    for (var j = detailData.length - 1; j >= 1; j--) {
+      if (detailData[j][detailSidCol] === params.sessionId) {
+        detailSheet.deleteRow(j + 1);
+      }
+    }
+    // セッション行を削除
+    sessionSheet.deleteRow(sessionRow);
+    return { success: true };
   } finally {
     lock.releaseLock();
   }

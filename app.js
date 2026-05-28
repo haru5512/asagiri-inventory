@@ -1131,8 +1131,39 @@ const App = (() => {
       goToTop();
       return;
     }
+    if (stCountedNum === 0) {
+      if (confirm('まだ何もカウントしていません。\n棚卸をキャンセルしますか？')) {
+        cancelStocktake();
+      }
+      return;
+    }
     if (confirm('棚卸を終了しますか？\n終了するとサマリー画面に移動します。')) {
       fetchStocktakeSummary();
+    }
+  }
+
+  async function cancelStocktake() {
+    stopScan();
+    showScreen('screen-loading');
+    try {
+      const params = new URLSearchParams({
+        action: 'cancelStocktake',
+        gmail: getGmail(),
+        password: getPassword(),
+        sessionId: stSessionId,
+      });
+      const url = getApiUrl() + '?' + params.toString();
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'キャンセルに失敗しました');
+      stSessionId = null;
+      stCountedNum = 0;
+      stTotalItems = 0;
+      stCurrentItem = null;
+      showScreen('screen-top');
+    } catch (err) {
+      alert('エラー: ' + err.message);
+      goToStScan();
     }
   }
 
