@@ -497,10 +497,10 @@ function findItemByBarcode(barcode) {
   const items = getSheetData(SHEETS.M_ITEM);
   
   // バーコード列で検索(完全一致、有効品のみ)
-  const found = items.find(item => 
+  let found = items.find(item =>
     String(item['バーコード']).trim() === code && item['有効'] === true
   );
-  
+
   if (!found) {
     // バーコード未登録の場合、品目IDでの直接検索もトライ
     found = items.find(item =>
