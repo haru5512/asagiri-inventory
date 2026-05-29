@@ -752,7 +752,10 @@ const Inv = (() => {
         document.getElementById('reg-tax').value = d['税率'] != null ? String(d['税率']) : '0.08';
         document.getElementById('reg-cost').value = d['標準単価'] || '';
         document.getElementById('reg-price').value = d['販売単価'] || '';
-        document.getElementById('reg-threshold').value = d['閾値'] || '';
+        const hasThreshold = d['閾値'] != null && d['閾値'] !== '' && d['閾値'] !== 0;
+        document.getElementById('reg-alert-on').checked = hasThreshold;
+        document.getElementById('reg-threshold').value = hasThreshold ? d['閾値'] : '';
+        document.getElementById('alert-fields').style.display = hasThreshold ? 'flex' : 'none';
         document.getElementById('reg-lot').checked = d['ロット管理'] === true || d['ロット管理'] === 'TRUE';
         document.getElementById('reg-expiry').checked = d['賞味期限管理'] === true || d['賞味期限管理'] === 'TRUE';
         // Location select: set after locations are loaded
@@ -803,13 +806,21 @@ const Inv = (() => {
     document.getElementById('reg-cost').value = '';
     document.getElementById('reg-price').value = '';
     document.getElementById('reg-location').value = '';
+    document.getElementById('reg-alert-on').checked = false;
     document.getElementById('reg-threshold').value = '';
+    document.getElementById('alert-fields').style.display = 'none';
     document.getElementById('reg-lot').checked = false;
     document.getElementById('reg-expiry').checked = false;
     const msg = document.getElementById('reg-message');
     msg.style.display = 'none';
     msg.textContent = '';
     msg.className = 'reg-message';
+  }
+
+  function toggleAlertField() {
+    const on = document.getElementById('reg-alert-on').checked;
+    document.getElementById('alert-fields').style.display = on ? 'flex' : 'none';
+    if (!on) document.getElementById('reg-threshold').value = '';
   }
 
   function showRegMessage(text, isError) {
@@ -1246,5 +1257,5 @@ const Inv = (() => {
     rawData = { stock: [], lots: [], history: [], stocktake: [] };
   }
 
-  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake, saveStCounts, printStReport };
+  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake, saveStCounts, printStReport, toggleAlertField };
 })();
