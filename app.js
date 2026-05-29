@@ -330,6 +330,8 @@ const App = (() => {
     stCountedNum = 0;
     stCurrentItem = null;
     showScreen('screen-top');
+    const warn = document.getElementById('setup-warning');
+    if (warn) warn.style.display = isApiConfigured() ? 'none' : 'block';
     loadDashboard();
   }
 

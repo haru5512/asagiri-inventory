@@ -1,7 +1,7 @@
 // Phase 2: ネットワーク優先、失敗時のみキャッシュ。
 // 本格的なキャッシュ更新戦略は Phase 3 で実装する(設計図 §5.キャッシュ更新戦略 参照)
 
-const CACHE_NAME = 'asagiri-inventory-v0.4.1';
+const CACHE_NAME = 'asagiri-inventory-v0.4.2';
 const PRECACHE = [
   './',
   './index.html',

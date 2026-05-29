@@ -626,6 +626,18 @@ html, body {
   padding: 14px 16px 18px;
 }
 
+.setup-warning {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
 .work-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
