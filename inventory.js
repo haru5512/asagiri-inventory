@@ -721,19 +721,67 @@ const Inv = (() => {
     document.getElementById('modal-overlay').style.display = 'flex';
   }
 
-  function openEditModal(row) {
+  async function openEditModal(row) {
     editItemId = row['品目ID'];
     clearForm();
     const titleEl = document.getElementById('modal-title');
     if (titleEl) titleEl.textContent = '商品編集 — ' + editItemId;
     document.getElementById('btn-reg-continue').style.display = 'none';
-    document.getElementById('btn-reg-close').textContent = '保存';
-    // Pre-fill available fields from stock list data
-    document.getElementById('reg-name').value = row['品名'] || '';
-    document.getElementById('reg-category').value = row['大カテゴリ'] || '';
-    document.getElementById('reg-unit').value = row['単位'] || '';
+    const btnClose = document.getElementById('btn-reg-close');
+    btnClose.textContent = '読み込み中...';
+    btnClose.disabled = true;
     loadLocations();
     document.getElementById('modal-overlay').style.display = 'flex';
+
+    // Fetch full item details from API
+    try {
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const url = getApiUrl() + '?action=getItemById&gmail=' + encodeURIComponent(gmail)
+        + '&password=' + encodeURIComponent(password)
+        + '&品目ID=' + encodeURIComponent(editItemId);
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+      if (json.success && json.data) {
+        const d = json.data;
+        document.getElementById('reg-name').value = d['品名'] || '';
+        document.getElementById('reg-barcode').value = d['バーコード'] || '';
+        document.getElementById('reg-category').value = d['大カテゴリ'] || '';
+        document.getElementById('reg-subcategory').value = d['中カテゴリ'] || '';
+        document.getElementById('reg-unit').value = d['単位'] || '';
+        document.getElementById('reg-tax').value = d['税率'] != null ? String(d['税率']) : '0.08';
+        document.getElementById('reg-cost').value = d['標準単価'] || '';
+        document.getElementById('reg-price').value = d['販売単価'] || '';
+        document.getElementById('reg-threshold').value = d['閾値'] || '';
+        document.getElementById('reg-lot').checked = d['ロット管理'] === true || d['ロット管理'] === 'TRUE';
+        document.getElementById('reg-expiry').checked = d['賞味期限管理'] === true || d['賞味期限管理'] === 'TRUE';
+        // Location select: set after locations are loaded
+        const locVal = d['主場所ID'] || '';
+        const locSelect = document.getElementById('reg-location');
+        if (locVal) {
+          const trySet = () => {
+            for (const opt of locSelect.options) {
+              if (opt.value === locVal) { locSelect.value = locVal; return; }
+            }
+          };
+          trySet();
+          setTimeout(trySet, 500);
+        }
+      } else {
+        // Fallback to row data
+        document.getElementById('reg-name').value = row['品名'] || '';
+        document.getElementById('reg-category').value = row['大カテゴリ'] || '';
+        document.getElementById('reg-unit').value = row['単位'] || '';
+      }
+    } catch (e) {
+      // Fallback to row data
+      document.getElementById('reg-name').value = row['品名'] || '';
+      document.getElementById('reg-category').value = row['大カテゴリ'] || '';
+      document.getElementById('reg-unit').value = row['単位'] || '';
+    } finally {
+      btnClose.textContent = '保存';
+      btnClose.disabled = false;
+    }
   }
 
   function closeModal() {
