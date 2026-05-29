@@ -442,11 +442,10 @@ const Inv = (() => {
   }
 
   function createStatusBadge(value) {
-    const text = value || 'OK';
-    let cls = 'status-badge status-ok';
-    if (text.includes('不足') || text.includes('切れ') || text.includes('差異')) {
-      cls = 'status-badge status-danger';
-    } else if (text.includes('期限') || text.includes('注意') || text.includes('近')) {
+    const text = (value || '').trim();
+    if (!text || text === 'OK' || text === '正常') return document.createTextNode('');
+    let cls = 'status-badge status-danger';
+    if (text.includes('期限') || text.includes('注意') || text.includes('近')) {
       cls = 'status-badge status-warning';
     } else if (text.includes('進行')) {
       cls = 'status-badge status-info';
