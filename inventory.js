@@ -6,6 +6,8 @@ const Inv = (() => {
   let sortKey = '';
   let sortAsc = true;
   let editItemId = null;
+  const PAGE_SIZE = 15;
+  let currentPage = 1;
 
   // --- DOM helper ---
   function el(tag, attrs, ...children) {
@@ -268,6 +270,7 @@ const Inv = (() => {
     currentTab = tab;
     sortKey = '';
     sortAsc = true;
+    currentPage = 1;
     document.querySelectorAll('.tab').forEach(t => {
       t.classList.toggle('active', t.dataset.tab === tab);
     });
@@ -343,8 +346,8 @@ const Inv = (() => {
   // --- Bind filter events ---
   function bindFilterEvents() {
     document.querySelectorAll('#filters input, #filters select').forEach(input => {
-      input.addEventListener('input', () => renderTableBody());
-      input.addEventListener('change', () => renderTableBody());
+      input.addEventListener('input', () => { currentPage = 1; renderTableBody(); });
+      input.addEventListener('change', () => { currentPage = 1; renderTableBody(); });
     });
   }
 
@@ -372,11 +375,17 @@ const Inv = (() => {
     const emptyMsg = document.getElementById('empty-message');
     tbody.textContent = '';
 
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    const startIdx = (currentPage - 1) * PAGE_SIZE;
+    const pageRows = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+
     if (filtered.length === 0) {
       emptyMsg.style.display = 'block';
     } else {
       emptyMsg.style.display = 'none';
-      for (const row of filtered) {
+      for (const row of pageRows) {
         const tr = document.createElement('tr');
         for (const col of config.columns) {
           const td = document.createElement('td');
@@ -437,8 +446,45 @@ const Inv = (() => {
     document.getElementById('row-count').textContent =
       '表示: ' + filtered.length + '件' +
       (data.length !== filtered.length ? ' / 全' + data.length + '件' : '');
+    renderPagination(filtered.length, totalPages);
     renderDashboard();
     renderAttentionPanel();
+  }
+
+  function renderPagination(total, totalPages) {
+    const box = document.getElementById('pagination');
+    if (!box) return;
+    box.textContent = '';
+    if (totalPages <= 1) return;
+
+    const prev = el('button', { onClick: () => { currentPage--; renderTableBody(); } }, '←');
+    if (currentPage <= 1) prev.disabled = true;
+    box.appendChild(prev);
+
+    // Show page numbers with ellipsis
+    const pages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+        pages.push(i);
+      } else if (pages[pages.length - 1] !== '...') {
+        pages.push('...');
+      }
+    }
+    for (const p of pages) {
+      if (p === '...') {
+        box.appendChild(el('span', { style: 'color:#999;font-size:13px;' }, '…'));
+      } else {
+        const btn = el('button', {
+          className: p === currentPage ? 'active' : '',
+          onClick: () => { currentPage = p; renderTableBody(); }
+        }, String(p));
+        box.appendChild(btn);
+      }
+    }
+
+    const next = el('button', { onClick: () => { currentPage++; renderTableBody(); } }, '→');
+    if (currentPage >= totalPages) next.disabled = true;
+    box.appendChild(next);
   }
 
   function createStatusBadge(value) {

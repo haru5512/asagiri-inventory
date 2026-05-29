@@ -744,6 +744,39 @@ body {
   font-weight: 700;
 }
 
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.pagination button {
+  min-width: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pagination button:hover { background: #f0f7f1; }
+
+.pagination button.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .table-container {
   border: none;
   border-radius: 0 0 8px 8px;
@@ -758,6 +791,12 @@ thead th {
 tbody td {
   padding: 7px 14px;
   font-size: 13px;
+}
+
+tbody td .btn-fetch {
+  min-height: auto;
+  padding: 3px 10px;
+  font-size: 12px;
 }
 
 tbody tr:nth-child(even) {
