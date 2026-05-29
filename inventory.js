@@ -508,12 +508,23 @@ const Inv = (() => {
     return text && text !== 'OK' && text !== '正常';
   }
 
+  function getExpiryLevel(row) {
+    const d = row['賞味期限'];
+    if (!d) return null;
+    const expiry = new Date(d);
+    if (isNaN(expiry.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+    const days = Math.floor((expiry - today) / 86400000);
+    if (days < 0) return { cls: 'attention-danger', label: '期限切れ', days: days };
+    if (days <= 30) return { cls: 'attention-warning', label: 'あと' + days + '日', days: days };
+    return null;
+  }
+
   function renderDashboard() {
     const stockAlert = rawData.stock.filter(r => isProblemText(String(r['アラート'] || '').trim())).length;
-    const expiryAlert = rawData.lots.filter(r => {
-      const status = String(r['ステータス'] || '').trim();
-      return status && status !== 'OK' && status !== '正常';
-    }).length;
+    const expiryAlert = rawData.lots.filter(r => getExpiryLevel(r) !== null).length;
     const stocktakePending = rawData.stocktake.filter(r => r['ステータス'] === '完了待ち').length;
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -550,13 +561,13 @@ const Inv = (() => {
     }
 
     for (const row of rawData.lots) {
-      const status = String(row['ステータス'] || '').trim();
-      if (isProblemText(status)) {
+      const lvl = getExpiryLevel(row);
+      if (lvl) {
         items.push({
-          cls: 'attention-warning',
-          label: '期限注意',
+          cls: lvl.cls,
+          label: lvl.days < 0 ? '期限切れ' : '期限注意',
           title: row['品名'] || row['品目ID'] || 'ロット',
-          meta: status + (row['賞味期限'] ? ' / ' + row['賞味期限'] : ''),
+          meta: lvl.label + (row['賞味期限'] ? ' / ' + row['賞味期限'] : ''),
         });
       }
     }
@@ -815,6 +826,12 @@ const Inv = (() => {
     msg.style.display = 'none';
     msg.textContent = '';
     msg.className = 'reg-message';
+  }
+
+  function onLotToggle() {
+    if (document.getElementById('reg-lot').checked) {
+      document.getElementById('reg-expiry').checked = true;
+    }
   }
 
   function toggleAlertField() {
@@ -1257,5 +1274,5 @@ const Inv = (() => {
     rawData = { stock: [], lots: [], history: [], stocktake: [] };
   }
 
-  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake, saveStCounts, printStReport, toggleAlertField };
+  return { switchTab, fetchData, login, logout, openModal, closeModal, closeModalOnOverlay, registerItem, closeStDetailModal, closeStModal, approveStocktake, saveStCounts, printStReport, toggleAlertField, onLotToggle };
 })();
