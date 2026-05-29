@@ -323,14 +323,6 @@ tbody tr:nth-child(even):hover { background: #f0f7f1; }
   border-color: var(--primary);
 }
 
-.toggle-row {
-  gap: 24px;
-}
-
-.toggle-row .form-field {
-  flex: 0 0 auto;
-}
-
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -341,12 +333,25 @@ tbody tr:nth-child(even):hover { background: #f0f7f1; }
   padding-top: 18px;
 }
 
-.conditional-fields {
-  background: #f8faf8;
+.option-section {
   border: 1px solid #e2e8e2;
-  border-radius: 6px;
-  padding: 12px 14px 6px;
-  margin-top: -6px;
+  border-radius: 8px;
+  padding: 0 14px 10px;
+  margin-bottom: 10px;
+  background: #fbfcfb;
+}
+
+.option-toggle {
+  padding-top: 10px !important;
+  font-weight: 600 !important;
+}
+
+.option-detail {
+  padding: 8px 0 2px;
+}
+
+.option-detail .form-field {
+  max-width: 220px;
 }
 
 .checkbox-label input[type="checkbox"] {

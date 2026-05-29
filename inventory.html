@@ -176,29 +176,26 @@
             </div>
             <div class="form-field"></div>
           </div>
-          <div class="form-row toggle-row">
-            <div class="form-field">
-              <label class="checkbox-label">
-                <input type="checkbox" id="reg-alert-on" onchange="Inv.toggleAlertField()"> 在庫アラートを設定
-              </label>
-            </div>
-            <div class="form-field">
-              <label class="checkbox-label">
-                <input type="checkbox" id="reg-lot"> ロット管理する
-              </label>
-            </div>
-            <div class="form-field">
-              <label class="checkbox-label">
-                <input type="checkbox" id="reg-expiry"> 賞味期限管理する
-              </label>
+          <div class="option-section">
+            <label class="checkbox-label option-toggle">
+              <input type="checkbox" id="reg-alert-on" onchange="Inv.toggleAlertField()"> 在庫アラートを設定
+            </label>
+            <div id="alert-fields" class="option-detail" style="display:none;">
+              <div class="form-field">
+                <label>閾値（この数量以下でアラート）</label>
+                <input type="number" id="reg-threshold" placeholder="例: 10" min="0">
+              </div>
             </div>
           </div>
-          <div id="alert-fields" class="form-row conditional-fields" style="display:none;">
-            <div class="form-field">
-              <label>閾値（この数量以下でアラート）</label>
-              <input type="number" id="reg-threshold" placeholder="例: 10" min="0">
-            </div>
-            <div class="form-field"></div>
+          <div class="option-section">
+            <label class="checkbox-label option-toggle">
+              <input type="checkbox" id="reg-lot"> ロット管理する
+            </label>
+          </div>
+          <div class="option-section">
+            <label class="checkbox-label option-toggle">
+              <input type="checkbox" id="reg-expiry"> 賞味期限管理する
+            </label>
           </div>
           <div id="reg-message" class="reg-message" style="display:none;"></div>
         </div>

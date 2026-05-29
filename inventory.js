@@ -755,7 +755,7 @@ const Inv = (() => {
         const hasThreshold = d['閾値'] != null && d['閾値'] !== '' && d['閾値'] !== 0;
         document.getElementById('reg-alert-on').checked = hasThreshold;
         document.getElementById('reg-threshold').value = hasThreshold ? d['閾値'] : '';
-        document.getElementById('alert-fields').style.display = hasThreshold ? 'flex' : 'none';
+        document.getElementById('alert-fields').style.display = hasThreshold ? 'block' : 'none';
         document.getElementById('reg-lot').checked = d['ロット管理'] === true || d['ロット管理'] === 'TRUE';
         document.getElementById('reg-expiry').checked = d['賞味期限管理'] === true || d['賞味期限管理'] === 'TRUE';
         // Location select: set after locations are loaded
@@ -819,7 +819,7 @@ const Inv = (() => {
 
   function toggleAlertField() {
     const on = document.getElementById('reg-alert-on').checked;
-    document.getElementById('alert-fields').style.display = on ? 'flex' : 'none';
+    document.getElementById('alert-fields').style.display = on ? 'block' : 'none';
     if (!on) document.getElementById('reg-threshold').value = '';
   }
 
