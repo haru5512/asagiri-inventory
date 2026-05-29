@@ -1430,6 +1430,7 @@ const App = (() => {
     const fields = [
       { label: '品目ID', key: '品目ID' },
       { label: '品名', key: '品名' },
+      { label: '現在在庫', key: '現在在庫数', format: (v, item) => String(v) + ' ' + (item['単位'] || '') },
       { label: 'バーコード', key: 'バーコード' },
       { label: '大カテゴリ', key: '大カテゴリ' },
       { label: '中カテゴリ', key: '中カテゴリ' },
@@ -1447,8 +1448,8 @@ const App = (() => {
 
     for (const f of fields) {
       const val = item[f.key];
-      if (val === undefined || val === null || val === '') continue;
-      const display = f.format ? f.format(val) : String(val);
+      if (val === undefined || val === null || (val === '' && f.key !== '現在在庫数')) continue;
+      const display = f.format ? f.format(val, item) : String(val);
       card.appendChild(
         el('div', { className: 'result-row' },
           el('span', { className: 'result-label' }, f.label),

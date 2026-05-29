@@ -501,13 +501,19 @@ function findItemByBarcode(barcode) {
     String(item['バーコード']).trim() === code && item['有効'] === true
   );
   
-  if (found) return found;
-  
-  // バーコード未登録の場合、品目IDでの直接検索もトライ
-  // (自社QRに品目IDをそのまま埋め込んでいるケース対応)
-  return items.find(item => 
-    item['品目ID'] === code && item['有効'] === true
-  ) || null;
+  if (!found) {
+    // バーコード未登録の場合、品目IDでの直接検索もトライ
+    found = items.find(item =>
+      item['品目ID'] === code && item['有効'] === true
+    ) || null;
+  }
+
+  // 現在在庫数を付与
+  if (found) {
+    found['現在在庫数'] = getCurrentStockByItemId(found['品目ID']);
+  }
+
+  return found;
 }
 
 /**
