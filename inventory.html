@@ -25,13 +25,38 @@
 
   <div class="page" id="main-page" style="display:none;">
     <header class="page-header">
-      <h1>Asagiri Inventory - 在庫管理</h1>
-      <div>
-        <span id="login-user" style="font-size:13px;color:#666;margin-right:12px;"></span>
-        <button class="btn-print" onclick="window.print()">印刷</button>
+      <div class="page-title">
+        <h1>Asagiri Inventory</h1>
+        <span>在庫管理</span>
+      </div>
+      <div class="header-actions">
+        <span id="login-user" class="login-user"></span>
         <button class="btn-logout" onclick="Inv.logout()">ログアウト</button>
       </div>
     </header>
+
+    <section class="kpi-grid" aria-label="管理サマリー">
+      <div class="kpi-card kpi-card-alert">
+        <div class="kpi-label">在庫アラート</div>
+        <div class="kpi-value" id="kpi-stock-alert">0件</div>
+        <div class="kpi-hint">不足・閾値割れ</div>
+      </div>
+      <div class="kpi-card kpi-card-expiry">
+        <div class="kpi-label">期限注意</div>
+        <div class="kpi-value" id="kpi-expiry-alert">0件</div>
+        <div class="kpi-hint">期限切れ・期限近い</div>
+      </div>
+      <div class="kpi-card kpi-card-stocktake">
+        <div class="kpi-label">棚卸</div>
+        <div class="kpi-value" id="kpi-stocktake-pending">0件</div>
+        <div class="kpi-hint">承認待ち</div>
+      </div>
+      <div class="kpi-card kpi-card-today">
+        <div class="kpi-label">今日の入出庫</div>
+        <div class="kpi-value" id="kpi-today-io">0件</div>
+        <div class="kpi-hint">記録件数</div>
+      </div>
+    </section>
 
     <nav class="tabs">
       <button class="tab active" data-tab="stock" onclick="Inv.switchTab('stock')">現在在庫</button>
@@ -44,25 +69,40 @@
 
     <div id="st-summary" class="st-summary" style="display:none;"></div>
 
-    <div class="table-container">
-      <table id="data-table">
-        <thead id="table-head"></thead>
-        <tbody id="table-body"></tbody>
-      </table>
-      <div id="empty-message" class="empty-message" style="display:none;">
-        データを読み込んでいます...
-      </div>
-    </div>
+    <main class="admin-main">
+      <section class="table-panel">
+        <div class="table-panel-header">
+          <div>
+            <h2 id="table-title">現在在庫</h2>
+            <p id="table-subtitle">フィルタ条件に一致する在庫を表示します</p>
+          </div>
+          <span id="row-count">表示: 0件</span>
+        </div>
+        <div class="table-container">
+          <table id="data-table">
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+          <div id="empty-message" class="empty-message" style="display:none;">
+            データを読み込んでいます...
+          </div>
+        </div>
+      </section>
 
-    <footer class="page-footer">
-      <span id="row-count">表示: 0件</span>
-    </footer>
+      <aside class="attention-panel">
+        <div class="attention-header">
+          <h2>要確認</h2>
+          <span id="attention-count">0件</span>
+        </div>
+        <div id="attention-list" class="attention-list"></div>
+      </aside>
+    </main>
 
     <!-- Item Registration Modal -->
     <div id="modal-overlay" class="modal-overlay" style="display:none;" onclick="Inv.closeModalOnOverlay(event)">
       <div class="modal">
         <div class="modal-header">
-          <h2>商品登録</h2>
+          <h2 id="modal-title">商品登録</h2>
           <button class="modal-close" onclick="Inv.closeModal()">&times;</button>
         </div>
         <div class="modal-body">

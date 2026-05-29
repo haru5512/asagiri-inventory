@@ -5,6 +5,7 @@ const Inv = (() => {
   let rawData = { stock: [], lots: [], history: [], stocktake: [] };
   let sortKey = '';
   let sortAsc = true;
+  let editItemId = null;
 
   // --- DOM helper ---
   function el(tag, attrs, ...children) {
@@ -51,6 +52,8 @@ const Inv = (() => {
   // --- Tab config ---
   const TAB_CONFIG = {
     stock: {
+      title: '現在在庫',
+      subtitle: '品目ごとの現在数量と在庫アラートを確認します',
       api: 'getCurrentStockList',
       columns: [
         { key: '品目ID', label: '品目ID' },
@@ -59,10 +62,13 @@ const Inv = (() => {
         { key: '現在在庫数', label: '数量', align: 'right' },
         { key: '単位', label: '単位' },
         { key: 'アラート', label: 'アラート' },
+        { key: '操作', label: '' },
       ],
       filters: ['category', 'itemName', 'location'],
     },
     lots: {
+      title: '賞味期限',
+      subtitle: '有効ロットの残数量と期限状態を確認します',
       api: 'getAllLots',
       columns: [
         { key: '品目ID', label: '品目ID' },
@@ -76,6 +82,8 @@ const Inv = (() => {
       filters: ['category', 'itemName', 'expiryDays'],
     },
     history: {
+      title: '入出庫履歴',
+      subtitle: '確定済みの入庫・出庫・移動・廃棄履歴を確認します',
       api: 'getTransactionHistory',
       columns: [
         { key: '日時', label: '日時' },
@@ -89,6 +97,8 @@ const Inv = (() => {
       filters: ['category', 'itemName', 'period', 'opType'],
     },
     stocktake: {
+      title: '棚卸',
+      subtitle: '棚卸セッションの進行状況と承認待ちを確認します',
       api: 'getStocktakeSessions',
       columns: [
         { key: 'セッションID', label: 'セッションID' },
@@ -197,8 +207,11 @@ const Inv = (() => {
       showMainPage();
     }
     renderFilters();
+    renderTableTitle();
     renderTableHead();
     renderStSummary();
+    renderDashboard();
+    renderAttentionPanel();
     renderTableBody();
   }
 
@@ -245,6 +258,8 @@ const Inv = (() => {
     // Re-render current tab with fresh data
     populateFilterOptions(rawData[currentTab]);
     renderStSummary();
+    renderDashboard();
+    renderAttentionPanel();
     renderTableBody();
   }
 
@@ -261,6 +276,9 @@ const Inv = (() => {
     renderTableHead();
     populateFilterOptions(rawData[currentTab]);
     renderStSummary();
+    renderTableTitle();
+    renderDashboard();
+    renderAttentionPanel();
     renderTableBody();
   }
 
@@ -272,15 +290,28 @@ const Inv = (() => {
     for (const f of config.filters) {
       if (FILTER_BUILDERS[f]) container.appendChild(FILTER_BUILDERS[f]());
     }
-    container.appendChild(el('button', {
+    const actions = el('div', { className: 'filter-actions' });
+    if (currentTab === 'stock') {
+      actions.appendChild(el('button', {
+        className: 'btn-register', id: 'btn-register', onClick: openModal
+      }, '商品登録'));
+    }
+    actions.appendChild(el('button', {
       className: 'btn-fetch', id: 'btn-fetch', onClick: fetchData
     }, 'データ更新'));
-    if (currentTab === 'stock') {
-      container.appendChild(el('button', {
-        className: 'btn-register', id: 'btn-register', onClick: openModal
-      }, '+ 新規登録'));
-    }
+    actions.appendChild(el('button', {
+      className: 'btn-print', onClick: () => window.print()
+    }, '印刷'));
+    container.appendChild(actions);
     bindFilterEvents();
+  }
+
+  function renderTableTitle() {
+    const config = TAB_CONFIG[currentTab];
+    const title = document.getElementById('table-title');
+    const subtitle = document.getElementById('table-subtitle');
+    if (title) title.textContent = config.title || '';
+    if (subtitle) subtitle.textContent = config.subtitle || '';
   }
 
   // --- Render table head ---
@@ -358,6 +389,13 @@ const Inv = (() => {
               + (status === '確定' ? 'st-status-confirmed' : '')
               + (status === '進行中' ? 'st-status-active' : '');
             td.appendChild(span);
+          } else if (currentTab === 'stock' && col.key === '操作') {
+            const editBtn = document.createElement('button');
+            editBtn.textContent = '編集';
+            editBtn.className = 'btn-fetch';
+            editBtn.style.padding = '4px 12px';
+            editBtn.addEventListener('click', () => openEditModal(row));
+            td.appendChild(editBtn);
           } else if (currentTab === 'stocktake' && col.key === '操作') {
             if (row['ステータス'] === '完了待ち' || row['ステータス'] === '確定') {
               const btn = document.createElement('button');
@@ -383,7 +421,11 @@ const Inv = (() => {
             if (val && (col.key === '開始日時' || col.key === '日時')) {
               val = formatDateTime(val);
             }
-            td.textContent = val;
+            if (col.key === 'アラート' || col.key === 'ステータス') {
+              td.appendChild(createStatusBadge(val));
+            } else {
+              td.textContent = val;
+            }
           }
           if (col.align) td.style.textAlign = col.align;
           tr.appendChild(td);
@@ -395,6 +437,112 @@ const Inv = (() => {
     document.getElementById('row-count').textContent =
       '表示: ' + filtered.length + '件' +
       (data.length !== filtered.length ? ' / 全' + data.length + '件' : '');
+    renderDashboard();
+    renderAttentionPanel();
+  }
+
+  function createStatusBadge(value) {
+    const text = value || 'OK';
+    let cls = 'status-badge status-ok';
+    if (text.includes('不足') || text.includes('切れ') || text.includes('差異')) {
+      cls = 'status-badge status-danger';
+    } else if (text.includes('期限') || text.includes('注意') || text.includes('近')) {
+      cls = 'status-badge status-warning';
+    } else if (text.includes('進行')) {
+      cls = 'status-badge status-info';
+    }
+    return el('span', { className: cls }, text);
+  }
+
+  function setText(id, value) {
+    const node = document.getElementById(id);
+    if (node) node.textContent = value;
+  }
+
+  function isProblemText(text) {
+    return text && text !== 'OK' && text !== '正常';
+  }
+
+  function renderDashboard() {
+    const stockAlert = rawData.stock.filter(r => isProblemText(String(r['アラート'] || '').trim())).length;
+    const expiryAlert = rawData.lots.filter(r => {
+      const status = String(r['ステータス'] || '').trim();
+      return status && status !== 'OK' && status !== '正常';
+    }).length;
+    const stocktakePending = rawData.stocktake.filter(r => r['ステータス'] === '完了待ち').length;
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayKeys = [yyyy + '-' + mm + '-' + dd, yyyy + '/' + mm + '/' + dd];
+    const todayIo = rawData.history.filter(r => {
+      const dateText = String(r['日時'] || '');
+      return todayKeys.some(key => dateText.startsWith(key));
+    }).length;
+
+    setText('kpi-stock-alert', stockAlert + '件');
+    setText('kpi-expiry-alert', expiryAlert + '件');
+    setText('kpi-stocktake-pending', stocktakePending + '件');
+    setText('kpi-today-io', todayIo + '件');
+  }
+
+  function renderAttentionPanel() {
+    const list = document.getElementById('attention-list');
+    const count = document.getElementById('attention-count');
+    if (!list) return;
+    const items = [];
+
+    for (const row of rawData.stock) {
+      const alert = String(row['アラート'] || '').trim();
+      if (isProblemText(alert)) {
+        items.push({
+          cls: 'attention-danger',
+          label: '在庫アラート',
+          title: row['品名'] || row['品目ID'] || '品目',
+          meta: alert,
+        });
+      }
+    }
+
+    for (const row of rawData.lots) {
+      const status = String(row['ステータス'] || '').trim();
+      if (isProblemText(status)) {
+        items.push({
+          cls: 'attention-warning',
+          label: '期限注意',
+          title: row['品名'] || row['品目ID'] || 'ロット',
+          meta: status + (row['賞味期限'] ? ' / ' + row['賞味期限'] : ''),
+        });
+      }
+    }
+
+    for (const row of rawData.stocktake) {
+      if (row['ステータス'] === '完了待ち') {
+        items.push({
+          cls: 'attention-info',
+          label: '承認待ち',
+          title: row['セッションID'] || '棚卸セッション',
+          meta: '差異あり ' + (row['差異あり数'] || 0) + '件',
+        });
+      }
+    }
+
+    list.textContent = '';
+    const shown = items.slice(0, 6);
+    if (count) count.textContent = items.length + '件';
+
+    if (shown.length === 0) {
+      list.appendChild(el('div', { className: 'attention-empty' }, '現在、要確認項目はありません'));
+      return;
+    }
+
+    for (const item of shown) {
+      list.appendChild(el('div', { className: 'attention-item ' + item.cls },
+        el('div', { className: 'attention-label' }, item.label),
+        el('div', { className: 'attention-title' }, String(item.title)),
+        el('div', { className: 'attention-meta' }, String(item.meta))
+      ));
+    }
   }
 
   // --- Apply filters ---
@@ -518,7 +666,27 @@ const Inv = (() => {
   let locationCache = null;
 
   function openModal() {
+    editItemId = null;
     clearForm();
+    const titleEl = document.getElementById('modal-title');
+    if (titleEl) titleEl.textContent = '商品登録';
+    document.getElementById('btn-reg-continue').style.display = 'inline-block';
+    document.getElementById('btn-reg-close').textContent = '登録して閉じる';
+    loadLocations();
+    document.getElementById('modal-overlay').style.display = 'flex';
+  }
+
+  function openEditModal(row) {
+    editItemId = row['品目ID'];
+    clearForm();
+    const titleEl = document.getElementById('modal-title');
+    if (titleEl) titleEl.textContent = '商品編集 — ' + editItemId;
+    document.getElementById('btn-reg-continue').style.display = 'none';
+    document.getElementById('btn-reg-close').textContent = '保存';
+    // Pre-fill available fields from stock list data
+    document.getElementById('reg-name').value = row['品名'] || '';
+    document.getElementById('reg-category').value = row['大カテゴリ'] || '';
+    document.getElementById('reg-unit').value = row['単位'] || '';
     loadLocations();
     document.getElementById('modal-overlay').style.display = 'flex';
   }
@@ -538,7 +706,7 @@ const Inv = (() => {
     document.getElementById('reg-category').value = '';
     document.getElementById('reg-subcategory').value = '';
     document.getElementById('reg-unit').value = '';
-    document.getElementById('reg-tax').value = '8';
+    document.getElementById('reg-tax').value = '0.08';
     document.getElementById('reg-cost').value = '';
     document.getElementById('reg-price').value = '';
     document.getElementById('reg-location').value = '';
@@ -588,7 +756,26 @@ const Inv = (() => {
     }
   }
 
+  function collectFormParams() {
+    return {
+      品名: document.getElementById('reg-name').value.trim(),
+      バーコード: document.getElementById('reg-barcode').value.trim(),
+      大カテゴリ: document.getElementById('reg-category').value,
+      中カテゴリ: document.getElementById('reg-subcategory').value.trim(),
+      単位: document.getElementById('reg-unit').value,
+      標準単価: document.getElementById('reg-cost').value || '0',
+      販売単価: document.getElementById('reg-price').value || '0',
+      ロット管理: document.getElementById('reg-lot').checked ? 'TRUE' : 'FALSE',
+      賞味期限管理: document.getElementById('reg-expiry').checked ? 'TRUE' : 'FALSE',
+      税率: document.getElementById('reg-tax').value,
+      閾値: document.getElementById('reg-threshold').value || '',
+      主場所ID: document.getElementById('reg-location').value,
+    };
+  }
+
   async function registerItem(continueInput) {
+    if (editItemId) { await updateItem(); return; }
+
     const name = document.getElementById('reg-name').value.trim();
     const category = document.getElementById('reg-category').value;
     const unit = document.getElementById('reg-unit').value;
@@ -605,22 +792,12 @@ const Inv = (() => {
     try {
       const gmail = localStorage.getItem('USER_GMAIL') || '';
       const password = localStorage.getItem('USER_PASSWORD') || '';
+      const fields = collectFormParams();
       const params = new URLSearchParams({
         action: 'registerItem',
         gmail: gmail,
         password: password,
-        品名: name,
-        バーコード: document.getElementById('reg-barcode').value.trim(),
-        大カテゴリ: category,
-        中カテゴリ: document.getElementById('reg-subcategory').value.trim(),
-        単位: unit,
-        標準単価: document.getElementById('reg-cost').value || '0',
-        販売単価: document.getElementById('reg-price').value || '0',
-        ロット管理: document.getElementById('reg-lot').checked ? 'TRUE' : 'FALSE',
-        賞味期限管理: document.getElementById('reg-expiry').checked ? 'TRUE' : 'FALSE',
-        税率: document.getElementById('reg-tax').value,
-        閾値: document.getElementById('reg-threshold').value || '',
-        主場所ID: document.getElementById('reg-location').value,
+        ...fields,
       });
 
       const url = getApiUrl() + '?' + params.toString();
@@ -650,6 +827,45 @@ const Inv = (() => {
       showRegMessage('エラー: ' + err.message, true);
     } finally {
       btnContinue.disabled = false;
+      btnClose.disabled = false;
+    }
+  }
+
+  async function updateItem() {
+    const name = document.getElementById('reg-name').value.trim();
+    const category = document.getElementById('reg-category').value;
+    const unit = document.getElementById('reg-unit').value;
+
+    if (!name) { showRegMessage('品名を入力してください', true); return; }
+    if (!category) { showRegMessage('大カテゴリを選択してください', true); return; }
+    if (!unit) { showRegMessage('単位を選択してください', true); return; }
+
+    const btnClose = document.getElementById('btn-reg-close');
+    btnClose.disabled = true;
+
+    try {
+      const gmail = localStorage.getItem('USER_GMAIL') || '';
+      const password = localStorage.getItem('USER_PASSWORD') || '';
+      const fields = collectFormParams();
+      const params = new URLSearchParams({
+        action: 'updateItem',
+        gmail: gmail,
+        password: password,
+        品目ID: editItemId,
+        ...fields,
+      });
+
+      const url = getApiUrl() + '?' + params.toString();
+      const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+      const json = await res.json();
+
+      if (!json.success) throw new Error(json.error || '更新に失敗しました');
+
+      showRegMessage('更新しました（' + editItemId + '）', false);
+      setTimeout(() => { closeModal(); fetchData(); }, 1000);
+    } catch (err) {
+      showRegMessage('エラー: ' + err.message, true);
+    } finally {
       btnClose.disabled = false;
     }
   }

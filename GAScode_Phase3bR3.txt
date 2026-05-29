@@ -2600,6 +2600,118 @@ function getTransactionHistory() {
     .sort((a, b) => (a['日時'] > b['日時'] ? -1 : 1));
 }
 
+
+// ===== 商品登録 =====
+
+function registerItem(params) {
+  var auth = params.gmail ? requireGmailAuth(params.gmail, params.password) : requireAuth();
+
+  if (!params['品名']) throw new Error('品名は必須です');
+  if (!params['大カテゴリ']) throw new Error('大カテゴリは必須です');
+  if (!params['単位']) throw new Error('単位は必須です');
+
+  var sheet = getCurrentSpreadsheet().getSheetByName('M_品目');
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+
+  // 品目IDの自動採番
+  var maxNum = 0;
+  var idCol = headers.indexOf('品目ID');
+  for (var i = 1; i < data.length; i++) {
+    var id = String(data[i][idCol] || '');
+    var match = id.match(/^IT(\d+)$/);
+    if (match) {
+      var num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  var newId = 'IT' + String(maxNum + 1).padStart(3, '0');
+
+  var newRow = headers.map(function(h) {
+    switch (h) {
+      case '品目ID': return newId;
+      case 'バーコード': return params['バーコード'] || '';
+      case '品名': return params['品名'];
+      case '大カテゴリ': return params['大カテゴリ'];
+      case '中カテゴリ': return params['中カテゴリ'] || '';
+      case '単位': return params['単位'];
+      case '標準単価': return Number(params['標準単価']) || 0;
+      case '販売単価': return Number(params['販売単価']) || 0;
+      case 'ロット管理': return params['ロット管理'] === 'TRUE';
+      case '賞味期限管理': return params['賞味期限管理'] === 'TRUE';
+      case '税率': return Number(params['税率']) || 0.08;
+      case '閾値': return params['閾値'] ? Number(params['閾値']) : '';
+      case '主場所ID': return params['主場所ID'] || '';
+      case '有効': return true;
+      default: return '';
+    }
+  });
+
+  // データ最終行の次に挿入
+  var lastDataRow = 1;
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (data[i][idCol]) { lastDataRow = i + 1; break; }
+  }
+  sheet.getRange(lastDataRow + 1, 1, 1, newRow.length).setValues([newRow]);
+
+  return { '品目ID': newId };
+}
+
+
+// ===== 商品編集 =====
+
+function updateItem(params) {
+  var auth = params.gmail ? requireGmailAuth(params.gmail, params.password) : requireAuth();
+
+  var itemId = params['品目ID'];
+  if (!itemId) throw new Error('品目IDは必須です');
+  if (!params['品名']) throw new Error('品名は必須です');
+  if (!params['大カテゴリ']) throw new Error('大カテゴリは必須です');
+  if (!params['単位']) throw new Error('単位は必須です');
+
+  var sheet = getCurrentSpreadsheet().getSheetByName('M_品目');
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var idCol = headers.indexOf('品目ID');
+
+  // 該当行を探す
+  var targetRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === itemId) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+  if (targetRow === -1) throw new Error('品目が見つかりません: ' + itemId);
+
+  // 更新可能フィールドのマッピング
+  var updatable = {
+    'バーコード': params['バーコード'] || '',
+    '品名': params['品名'],
+    '大カテゴリ': params['大カテゴリ'],
+    '中カテゴリ': params['中カテゴリ'] || '',
+    '単位': params['単位'],
+    '標準単価': Number(params['標準単価']) || 0,
+    '販売単価': Number(params['販売単価']) || 0,
+    'ロット管理': params['ロット管理'] === 'TRUE',
+    '賞味期限管理': params['賞味期限管理'] === 'TRUE',
+    '税率': Number(params['税率']) || 0.08,
+    '閾値': params['閾値'] ? Number(params['閾値']) : '',
+    '主場所ID': params['主場所ID'] || '',
+  };
+
+  // ヘッダー位置に合わせてセル更新
+  for (var field in updatable) {
+    var col = headers.indexOf(field);
+    if (col >= 0) {
+      sheet.getRange(targetRow, col + 1).setValue(updatable[field]);
+    }
+  }
+
+  return { '品目ID': itemId, updated: true };
+}
+
+
 // ============================================================
 // Phase 1-E: Web App ルーティング + デプロイ
 // ============================================================
@@ -2804,6 +2916,10 @@ function dispatchAction(action, params) {
       return getAllLots();
     case 'getTransactionHistory':
       return getTransactionHistory();
+    case 'registerItem':
+      return registerItem(params);
+    case 'updateItem':
+      return updateItem(params);
 
     // === 棚卸 ===
     case 'startStocktake':
